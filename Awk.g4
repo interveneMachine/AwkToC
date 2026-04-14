@@ -3,8 +3,8 @@ grammar Awk;
 // --- Parser Rules ---
 
 program
-    : item_list
-    | item_list item
+    : terminator? item_list
+    | terminator? item_list item
     ;
 
 item_list
@@ -139,54 +139,52 @@ expr_opt
     | expr
     ;
 
-// Expression hierarchy with proper precedence (lowest to highest)
-// Using ANTLR4 left-recursive rules with precedence
 expr
-    : expr POW expr                          # powExpr
-    | INCR expr                               # preIncrExpr
-    | DECR expr                               # preDecrExpr
-    | NOT expr                                # notExpr
-    | PLUS expr                               # unaryPlusExpr
-    | MINUS expr                              # unaryMinusExpr
-    | expr INCR                               # postIncrExpr
-    | expr DECR                               # postDecrExpr
-    | expr MUL expr                           # mulExpr
-    | expr DIV expr                           # divExpr
-    | expr MOD expr                           # modExpr
-    | expr PLUS expr                          # addExpr
-    | expr MINUS expr                         # subExpr
-    | expr expr                               # concatExpr
-    | expr LT expr                            # ltExpr
-    | expr LE expr                            # leExpr
-    | expr GT expr                            # gtExpr
-    | expr GE expr                            # geExpr
-    | expr EQ expr                            # eqExpr
-    | expr NE expr                            # neExpr
-    | expr MATCH expr                         # matchExpr
-    | expr NO_MATCH expr                      # noMatchExpr
-    | expr IN NAME                            # inExpr
-    | LPAREN multiple_expr_list RPAREN IN NAME      # inMultiExpr
-    | expr AND newline_opt expr               # andExpr
-    | expr OR newline_opt expr                # orExpr
-    | expr QUESTION newline_opt expr COLON newline_opt expr  # ternaryExpr
-    | lvalue ASSIGN expr                      # assignExpr
-    | lvalue ADD_ASSIGN expr                  # addAssignExpr
-    | lvalue SUB_ASSIGN expr                  # subAssignExpr
-    | lvalue MUL_ASSIGN expr                  # mulAssignExpr
-    | lvalue DIV_ASSIGN expr                  # divAssignExpr
-    | lvalue MOD_ASSIGN expr                  # modAssignExpr
-    | lvalue POW_ASSIGN expr                  # powAssignExpr
-    | NOT expr                                # notExpr2
-    | LPAREN expr RPAREN                      # groupExpr
-    | getline_expr                            # getlineExpr
-    | NAME LPAREN expr_list_opt RPAREN        # funcCallExpr
-    | BUILTIN_FUNC_NAME LPAREN expr_list_opt RPAREN # builtinFuncExpr
-    | BUILTIN_FUNC_NAME                       # builtinExpr
-    | lvalue                                  # lvalueExpr
-    | NUMBER                                  # numberExpr
-    | STRING                                  # stringExpr
-    | ERE                                     # ereExpr
-    | DOLLAR expr                             # fieldExpr
+    : expr POW expr
+    | INCR expr
+    | DECR expr
+    | NOT expr
+    | PLUS expr
+    | MINUS expr
+    | expr INCR
+    | expr DECR
+    | expr MUL expr
+    | expr DIV expr
+    | expr MOD expr
+    | expr PLUS expr
+    | expr MINUS expr
+    | expr expr /* concatenate strings */
+    | expr LT expr
+    | expr LE expr
+    | expr GT expr
+    | expr GE expr
+    | expr EQ expr
+    | expr NE expr
+    | expr MATCH expr
+    | expr NO_MATCH expr
+    | expr IN NAME
+    | LPAREN multiple_expr_list RPAREN IN NAME
+    | expr AND newline_opt expr
+    | expr OR newline_opt expr
+    | expr QUESTION newline_opt expr COLON newline_opt expr
+    | lvalue ASSIGN expr
+    | lvalue ADD_ASSIGN expr
+    | lvalue SUB_ASSIGN expr
+    | lvalue MUL_ASSIGN expr
+    | lvalue DIV_ASSIGN expr
+    | lvalue MOD_ASSIGN expr
+    | lvalue POW_ASSIGN expr
+    | NOT expr
+    | LPAREN expr RPAREN
+    | getline_expr
+    | NAME LPAREN expr_list_opt RPAREN
+    | BUILTIN_FUNC_NAME LPAREN expr_list_opt RPAREN
+    | BUILTIN_FUNC_NAME
+    | lvalue
+    | NUMBER
+    | STRING
+    | ERE
+    | DOLLAR expr
     ;
 
 // Getline expression variants (no recursion with expr to avoid left-recursion)
@@ -286,24 +284,21 @@ RBRACE     : '}' ;
 SEMICOLON  : ';' ;
 COMMA      : ',' ;
 
-// Built-in Functions (must come before NAME to have priority)
 BUILTIN_FUNC_NAME
     : 'atan2' | 'cos' | 'sin' | 'exp' | 'log' | 'sqrt' | 'int' | 'rand' | 'srand'
     | 'gsub' | 'index' | 'length' | 'match' | 'split' | 'sprintf' | 'sub'
     | 'substr' | 'tolower' | 'toupper' | 'close' | 'fflush' | 'system'
     ;
 
-// Identifiers (must come after keywords and built-in functions)
 NAME      : [a-zA-Z_][a-zA-Z0-9_]* ;
 
-NUMBER    : [0-9]+ ('.' [0-9]*)? ([eE] [+-]? [0-9]+)? 
+NUMBER    : [0-9]+ ('.' [0-9]*)? ([eE] [+-]? [0-9]+)?
           | '.' [0-9]+ ([eE] [+-]? [0-9]+)? ;
 STRING    : '"' ( '\\'. | ~["\\] )* '"' ;
 ERE       : '/' ( '\\'. | ~[/\\\r\n] )* '/' ;
 
 NEWLINE   : '\r'? '\n' ;
 
-// Comments
 COMMENT   : '#' ~[\r\n]* -> skip ;
 
 // Ignore remaining whitespace
