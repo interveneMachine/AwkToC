@@ -140,14 +140,16 @@ expr_opt
     ;
 
 expr
-    : expr POW expr
+    : LPAREN expr RPAREN
+    | DOLLAR expr
+    | expr INCR
+    | expr DECR
     | INCR expr
     | DECR expr
+    | expr POW expr
     | NOT expr
     | PLUS expr
     | MINUS expr
-    | expr INCR
-    | expr DECR
     | expr MUL expr
     | expr DIV expr
     | expr MOD expr
@@ -156,14 +158,14 @@ expr
     | expr expr /* concatenate strings */
     | expr LT expr
     | expr LE expr
+    | expr NE expr
+    | expr EQ expr
     | expr GT expr
     | expr GE expr
-    | expr EQ expr
-    | expr NE expr
     | expr MATCH expr
     | expr NO_MATCH expr
     | expr IN NAME
-    | LPAREN multiple_expr_list RPAREN IN NAME
+    | LPAREN multiple_expr_list RPAREN IN NAME //TODO
     | expr AND newline_opt expr
     | expr OR newline_opt expr
     | expr QUESTION newline_opt expr COLON newline_opt expr
@@ -174,8 +176,6 @@ expr
     | lvalue DIV_ASSIGN expr
     | lvalue MOD_ASSIGN expr
     | lvalue POW_ASSIGN expr
-    | NOT expr
-    | LPAREN expr RPAREN
     | getline_expr
     | NAME LPAREN expr_list_opt RPAREN
     | BUILTIN_FUNC_NAME LPAREN expr_list_opt RPAREN
@@ -184,7 +184,6 @@ expr
     | NUMBER
     | STRING
     | ERE
-    | DOLLAR expr
     ;
 
 // Getline expression variants (no recursion with expr to avoid left-recursion)
