@@ -2,7 +2,7 @@ BEGIN {
     printf "%-10s %-10s %-10s\n", "Name", "Rate", "Total Pay"
     print "------------------------------------------"
 }
-
+# test comments
 { print }
 
 {
@@ -11,6 +11,8 @@ BEGIN {
 
     printf "%-10s $%-9.2f $%-9.2f\n", $1, $2, total_pay
 }
+
+
 
 END {
     print "------------------------------------------"
