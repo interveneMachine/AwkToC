@@ -15,6 +15,7 @@ item_list
 item
     : action
     | pattern action
+    | simple_pattern
     | FUNCTION NAME '(' param_list_opt ')' newline_opt action
     ;
 
@@ -26,6 +27,11 @@ param_list_opt
 param_list
     : NAME
     | param_list ',' NAME
+    ;
+
+simple_pattern
+    : expr
+    | expr ',' newline_opt expr
     ;
 
 pattern
