@@ -40,6 +40,10 @@ Projekt skupia się na:
 | `PIPE`, `APPEND` | przekierowanie wyjścia |
 | `LPAREN`, `RPAREN`, `LBRACKET`, `RBRACKET`, `LBRACE`, `RBRACE` | nawiasy |
 | `COMMA`, `SEMICOLON` | separatory |
+| `BUILTIN_FUNC_NAME` | nazwy funkcji wbudowanych, np. `length`, `split`, `substr` |
+| `NEWLINE` | znak nowej linii |
+| `COMMENT` | komentarz zaczynający się od `#` |
+| `WS` | białe znaki pomijane przez lexer |
 
 # Autorzy
 
