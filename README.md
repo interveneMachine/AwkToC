@@ -5,6 +5,7 @@ Kompilacja programu z języka awk do C, tak by można było użyć innych kompil
 # Autorzy
 
 Piotr Bibrzycki email: pbibrzycki@student.agh.edu.pl
+
 Bartłomiej Cieśla email: bartekciesla@student.agh.edu.pl
 
 # Implementcja
