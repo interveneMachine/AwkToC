@@ -37,6 +37,8 @@ simple_pattern
 pattern
     : BEGIN
     | END
+    | BEGINFILE
+    | ENDFILE
     | expr
     | expr ',' newline_opt expr
     ;
@@ -224,6 +226,8 @@ newline_opt
 // Keywords (UPPERCASE for consistency)
 BEGIN    : 'BEGIN' ;
 END      : 'END' ;
+BEGINFILE : 'BEGINFILE' ;
+ENDFILE   : 'ENDFILE' ;
 BREAK    : 'break' ;
 CONTINUE : 'continue' ;
 DELETE   : 'delete' ;
