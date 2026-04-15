@@ -1,6 +1,6 @@
 grammar Awk;
 
-// --- Parser Rules ---
+//parser rules
 
 program
     : terminator? item_list
@@ -194,7 +194,7 @@ expr
     | ERE
     ;
 
-// Getline expression variants (no recursion with expr to avoid left-recursion)
+//getline expression variants 
 getline_expr
     : GETLINE lvalue?
     | GETLINE lvalue? LT expr
@@ -221,9 +221,9 @@ newline_opt
     | newline_opt NEWLINE
     ;
 
-// --- Lexer Rules ---
+// lexer rules
 
-// Keywords (UPPERCASE for consistency)
+// keywords
 BEGIN    : 'BEGIN' ;
 END      : 'END' ;
 BEGINFILE : 'BEGINFILE' ;
@@ -247,7 +247,7 @@ WHILE    : 'while' ;
 
 GETLINE  : 'getline' ;
 
-// Compound Operators
+// compound operators
 ADD_ASSIGN : '+=' ;
 SUB_ASSIGN : '-=' ;
 MUL_ASSIGN : '*=' ;
@@ -266,7 +266,7 @@ INCR       : '++' ;
 DECR       : '--' ;
 APPEND     : '>>' ;
 
-// Single-character operators needed for expr rule
+// single-character operators 
 ASSIGN     : '=' ;
 MATCH      : '~' ;
 LT         : '<' ;
@@ -310,5 +310,5 @@ NEWLINE   : '\r'? '\n' ;
 
 COMMENT   : '#' ~[\r\n]* -> skip ;
 
-// Ignore remaining whitespace
+// ignore remaining whitespaces
 WS        : [ \t]+ -> skip ;
