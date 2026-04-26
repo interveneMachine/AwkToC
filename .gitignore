@@ -1,0 +1,7 @@
+bin/
+obj/
+
+grammar/.antlr/
+grammar/*.cs
+grammar/*.interp
+grammar/*.tokens

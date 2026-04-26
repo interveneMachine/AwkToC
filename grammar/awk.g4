@@ -1,4 +1,4 @@
-grammar Awk;
+grammar awk;
 
 //parser rules
 
