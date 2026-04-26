@@ -9,28 +9,28 @@
 
   <ItemGroup>
     <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
-    <Compile Remove="grammar/awkParser.cs" />
-    <Compile Remove="grammar/awkLexer.cs" />
-    <Compile Remove="grammar/awkBaseVisitor.cs" />
-    <Compile Remove="grammar/awkVisitor.cs" />
-    <Compile Remove="grammar/awkBaseListener.cs" />
-    <Compile Remove="grammar/awkListener.cs" />
+    <Compile Remove="grammar/AwkParser.cs" />
+    <Compile Remove="grammar/AwkLexer.cs" />
+    <Compile Remove="grammar/AwkBaseVisitor.cs" />
+    <Compile Remove="grammar/AwkVisitor.cs" />
+    <Compile Remove="grammar/AwkBaseListener.cs" />
+    <Compile Remove="grammar/AwkListener.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="grammar/awkParser.cs" />
-    <Compile Include="grammar/awkLexer.cs" />
-    <Compile Include="grammar/awkBaseVisitor.cs" />
-    <Compile Include="grammar/awkVisitor.cs" />
-    <Compile Include="grammar/awkBaseListener.cs" />
-    <Compile Include="grammar/awkListener.cs" />
+    <Compile Include="grammar/AwkParser.cs" />
+    <Compile Include="grammar/AwkLexer.cs" />
+    <Compile Include="grammar/AwkBaseVisitor.cs" />
+    <Compile Include="grammar/AwkVisitor.cs" />
+    <Compile Include="grammar/AwkBaseListener.cs" />
+    <Compile Include="grammar/AwkListener.cs" />
   </ItemGroup>
 
   <Target Name="GenerateAntlr"
           BeforeTargets="BeforeBuild"
-          Inputs="grammar/awk.g4"
-          Outputs="grammar/awkParser.cs;grammar/awkLexer.cs;grammar/awkBaseVisitor.cs;grammar/awkVisitor.cs">
-    <Exec Command="antlr4 -Dlanguage=CSharp grammar/awk.g4 -visitor" />
+          Inputs="grammar/Awk.g4"
+          Outputs="grammar/AwkParser.cs;grammar/AwkLexer.cs;grammar/AwkBaseVisitor.cs;grammar/AwkVisitor.cs">
+    <Exec Command="antlr4 -Dlanguage=CSharp grammar/Awk.g4 -visitor" />
   </Target>
 
 </Project>
