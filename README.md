@@ -13,6 +13,12 @@ Projekt skupia się na:
 - analizie instrukcji, wyrażeń i operacji na danych
 - obsłudze charakterystycznych elementów języka, takich jak pola `$1`, `$2`, instrukcje `print`, `getline` oraz tablice asocjacyjne
 
+# Implementcja
+
+Język implementacji: C# \
+Generator parserów: ANTLR4
+
+
 # Spis tokenów 
 
 | Token | Znaczenie |
@@ -51,10 +57,6 @@ Piotr Bibrzycki pbibrzycki@student.agh.edu.pl
 
 Bartłomiej Cieśla bartekciesla@student.agh.edu.pl
 
-# Implementcja
-
-Język implementacji: C# \
-Generator parserów: ANTLR4
 
 
 
