@@ -55,17 +55,21 @@ Generator parserów: ANTLR4
 | `COMMENT` | komentarz zaczynający się od `#` |
 | `WS` | białe znaki pomijane przez lexer |
 
+
 ## Przykład działania
 
 ### Wejście
 
-Jan 9000 IT  
-Anna 12000 HR  
-Piotr 15000 IT  
-Jan 11000 IT  
+```
+Jan 9000 IT
+Anna 12000 HR
+Piotr 15000 IT
+Jan 11000 IT
+```
 
 ### Program AWK
 
+```awk
 BEGIN {
     total = 0
 }
@@ -82,12 +86,16 @@ END {
 
     print "Total:", total
 }
+```
 
 ### Wyjście
 
-Jan 2 20000  
-Piotr 1 15000  
+```
+Jan 2 20000
+Piotr 1 15000
 Total: 35000
+```
+
 
 # Autorzy
 
