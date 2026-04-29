@@ -13,6 +13,10 @@ Projekt skupia się na:
 - analizie instrukcji, wyrażeń i operacji na danych
 - obsłudze charakterystycznych elementów języka, takich jak pola `$1`, `$2`, instrukcje `print`, `getline` oraz tablice asocjacyjne
 
+# Uruchamianie
+
+dotnet run
+
 # Implementcja
 
 Język implementacji: C# \
