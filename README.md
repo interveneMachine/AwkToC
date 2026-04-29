@@ -55,6 +55,40 @@ Generator parserów: ANTLR4
 | `COMMENT` | komentarz zaczynający się od `#` |
 | `WS` | białe znaki pomijane przez lexer |
 
+## Przykład działania
+
+### Wejście
+
+Jan 9000 IT  
+Anna 12000 HR  
+Piotr 15000 IT  
+Jan 11000 IT  
+
+### Program AWK
+
+BEGIN {
+    total = 0
+}
+
+$3 == "IT" {
+    count[$1]++
+    salary[$1] += $2
+    total += $2
+}
+
+END {
+    for (name in count)
+        print name, count[name], salary[name]
+
+    print "Total:", total
+}
+
+### Wyjście
+
+Jan 2 20000  
+Piotr 1 15000  
+Total: 35000
+
 # Autorzy
 
 Piotr Bibrzycki pbibrzycki@student.agh.edu.pl
