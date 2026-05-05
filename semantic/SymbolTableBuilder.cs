@@ -45,18 +45,16 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
 
     private void AddParameters(AwkParser.Param_listContext context)
     {
-        foreach (var nameToken in context.NAME())
+        var nameToken = context.NAME();
+        table.Add(new Symbol
         {
-            table.Add(new Symbol
-            {
-                Name = nameToken.GetText(),
-                Type = SymbolType.Parameter,
-                Scope = currentScope,
-                Line = nameToken.Symbol.Line,
-                Column = nameToken.Symbol.Column,
-                IsAssigned = true
-            });
-        }
+            Name = nameToken.GetText(),
+            Type = SymbolType.Parameter,
+            Scope = currentScope,
+            Line = nameToken.Symbol.Line,
+            Column = nameToken.Symbol.Column,
+            IsAssigned = true
+        });
     }
 
     public override object? VisitLvalue(AwkParser.LvalueContext context)
