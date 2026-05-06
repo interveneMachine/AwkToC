@@ -1,3 +1,4 @@
+using Antlr4.Runtime.Misc;
 using Antlr4.Runtime.Tree;
 
 namespace AwkToC.Semantic;
@@ -32,7 +33,7 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             var paramList = context.param_list_opt()?.param_list();
             if (paramList != null)
             {
-                AddParameters(paramList);
+                Visit(paramList);
             }
 
             Visit(context.action());
@@ -42,8 +43,7 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
 
         return base.VisitItem(context);
     }
-
-    private void AddParameters(AwkParser.Param_listContext context)
+    public override object VisitParam_list([NotNull] AwkParser.Param_listContext context)
     {
         var nameToken = context.NAME();
         table.Add(new Symbol
@@ -55,6 +55,9 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             Column = nameToken.Symbol.Column,
             IsAssigned = true
         });
+        if(context.param_list() != null)
+            Visit(context.param_list());
+        return null;
     }
 
     public override object? VisitLvalue(AwkParser.LvalueContext context)
