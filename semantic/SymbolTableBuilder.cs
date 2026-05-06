@@ -43,7 +43,7 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
 
         return base.VisitItem(context);
     }
-    public override object VisitParam_list([NotNull] AwkParser.Param_listContext context)
+    public override object? VisitParam_list([NotNull] AwkParser.Param_listContext context)
     {
         var nameToken = context.NAME();
         table.Add(new Symbol
