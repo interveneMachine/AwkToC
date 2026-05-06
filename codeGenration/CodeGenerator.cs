@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using Antlr4.Runtime.Misc;
 using Antlr4.Runtime.Tree;
 
@@ -18,7 +19,6 @@ class CodeGenerator : AwkBaseVisitor<string?>
 
     public override string? VisitProgram(AwkParser.ProgramContext context)
     {
-        Console.WriteLine("t");
         stream.Write("#include<stdio.h>\n" +
                      "int main()\n" + 
                      "{\n" +
