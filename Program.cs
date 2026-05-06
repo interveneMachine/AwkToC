@@ -13,6 +13,11 @@ class Program
         AwkParser.ProgramContext context = parser.program();
 
         var table = new AwkToC.Semantic.SymbolTableBuilder().Build(context);
+        using(StreamWriter sw = new StreamWriter("main.c"))
+        {
+            var generator = new AwkToC.CodeGeneration.CodeGenerator(table, sw);
+            generator.Visit(context);
+        }
         
         table.All().ToList().ForEach(v => Console.WriteLine(v.Name + "\t" + v.Scope + "\t" + v.Type));
         Console.WriteLine("Parse tree: " + context.ToStringTree(parser));
