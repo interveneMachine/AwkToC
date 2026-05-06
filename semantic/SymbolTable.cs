@@ -32,4 +32,9 @@ public class SymbolTable
     {
         return symbols.Values;
     }
+
+    public IEnumerable<Symbol> AllInScope(string scope)
+    {
+        return (IEnumerable<Symbol>)symbols.Values.Where(sym => sym.Scope == scope).GetEnumerator();
+    }
 }
