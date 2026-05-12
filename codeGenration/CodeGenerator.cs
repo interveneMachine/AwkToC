@@ -10,6 +10,7 @@ class CodeGenerator : AwkBaseVisitor<string?>
 {
     SymbolTable symbolTable;
     StreamWriter stream;
+    private string currentScope = "global";
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter stream)
     {
@@ -25,6 +26,22 @@ class CodeGenerator : AwkBaseVisitor<string?>
                      "  printf(\"test\\n\");\n" +
                      "  return 0;\n" +
                      "}\n");
-        return base.VisitProgram(context);
+        return VisitChildren(context);
+    }
+
+    public override string? VisitItem(AwkParser.ItemContext context)
+    {
+        if (context.FUNCTION() != null)
+        {
+            string functionName = context.NAME().GetText();
+            string previousScope = currentScope;
+            currentScope = $"function:{functionName}";
+
+            // correct scope for function
+
+            currentScope = previousScope;
+            return null;
+        }
+        return null;
     }
 }
