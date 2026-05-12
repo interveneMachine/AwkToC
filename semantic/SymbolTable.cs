@@ -2,6 +2,7 @@ namespace AwkToC.Semantic;
 
 public class SymbolTable
 {
+    private HashSet<string> UsedCNames = new();
     private readonly Dictionary<string, Symbol> symbols = new();
     public void Add(Symbol symbol)
     {
@@ -9,6 +10,11 @@ public class SymbolTable
         if (!symbols.ContainsKey(key))
         {
             symbols[key] = symbol;
+            string nameInC = symbol.Name;
+            while(UsedCNames.Contains(nameInC))
+                nameInC += "0";
+            symbols[key].NameInC = nameInC;
+            UsedCNames.Add(nameInC);
         }
     }
 

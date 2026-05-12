@@ -11,4 +11,5 @@ public class Symbol
     public bool IsUsed { get; set; }
     public bool IsArray { get; set; }
     public List<string> Parameters { get; set; } = new();
+    public string? NameInC { get; set; } = null;
 }
