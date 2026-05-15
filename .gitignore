@@ -1,7 +1,13 @@
 bin/
 obj/
 
-grammar/.antlr/
-grammar/*.cs
-grammar/*.interp
-grammar/*.tokens
+AwkToC/bin/
+AwkToC/obj/
+AwkToC/net8.0/
+AwkToC/grammar/.antlr/
+AwkToC/grammar/*.cs
+AwkToC/grammar/*.interp
+AwkToC/grammar/*.tokens
+AwkToC/AwkToC.csproj.lscache
+
+AwkToC.Tests/AwkToC.Tests.csproj.lscache
