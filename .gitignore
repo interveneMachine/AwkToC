@@ -11,3 +11,7 @@ AwkToC/grammar/*.tokens
 AwkToC/AwkToC.csproj.lscache
 
 AwkToC.Tests/AwkToC.Tests.csproj.lscache
+
+AwkToC.Tests/Tests/*/*/generatedResults.txt
+AwkToC.Tests/Tests/*/*/main
+AwkToC.Tests/Tests/*/*/main.c

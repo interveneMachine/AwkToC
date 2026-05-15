@@ -1,0 +1,3 @@
+END {
+    print "end"
+}
