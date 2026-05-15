@@ -15,9 +15,9 @@ class CWriter
     private string indent = "";
     private int indentLevel = 0;
 
-    public CWriter(string filename)
+    public CWriter(StreamWriter streamWriter)
     {
-        stream = new StreamWriter(filename);
+        stream = streamWriter;
     }
 
     public void WriteLine(string line)

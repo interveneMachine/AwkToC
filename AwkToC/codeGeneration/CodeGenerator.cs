@@ -12,10 +12,10 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     CWriter stream;
     private string currentScope = "global";
 
-    public CodeGenerator(SymbolTable symbolTable, string filename)
+    public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
         this.symbolTable = symbolTable;
-        stream = new CWriter(filename);
+        stream = new CWriter(streamWriter);
     }
 
     public override NodeCompilationResult VisitProgram(AwkParser.ProgramContext context)
