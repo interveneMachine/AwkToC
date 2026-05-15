@@ -10,11 +10,7 @@ public class SymbolTable
         if (!symbols.ContainsKey(key))
         {
             symbols[key] = symbol;
-            string nameInC = symbol.Name;
-            while(UsedCNames.Contains(nameInC))
-                nameInC += "0";
-            symbols[key].NameInC = nameInC;
-            UsedCNames.Add(nameInC);
+            symbols[key].NameInC = AddCName(symbol.Name);
         }
     }
 
@@ -32,6 +28,15 @@ public class SymbolTable
             return global;
         }
         return null;
+    }
+
+    public string AddCName(string name)
+    {
+        int suffix = 0;
+        while(UsedCNames.Contains(name + suffix))
+            suffix++;
+        UsedCNames.Add(name + suffix);
+        return name + suffix;
     }
 
     public IEnumerable<Symbol> All()
