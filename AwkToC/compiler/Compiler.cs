@@ -2,7 +2,7 @@ using Antlr4.Runtime;
 
 namespace AwkToC.Compiler;
 
-class Compiler
+public class Compiler
 {
     public static void Compile(StreamReader streamIn, StreamWriter streamOut)
     {
