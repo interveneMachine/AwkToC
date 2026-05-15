@@ -6,7 +6,7 @@ using AwkToC.Semantic;
 
 namespace AwkToC.CodeGeneration;
 
-class CodeGenerator : AwkBaseVisitor<string?>
+class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 {
     SymbolTable symbolTable;
     CWriter stream;
@@ -18,7 +18,7 @@ class CodeGenerator : AwkBaseVisitor<string?>
         stream = new CWriter(filename);
     }
 
-    public override string? VisitProgram(AwkParser.ProgramContext context)
+    public override NodeCompilationResult VisitProgram(AwkParser.ProgramContext context)
     {
         stream.WriteLine("#include<stdio.h>");
         stream.HSpace(2);
@@ -30,7 +30,7 @@ class CodeGenerator : AwkBaseVisitor<string?>
         return VisitChildren(context);
     }
 
-    public override string? VisitItem(AwkParser.ItemContext context)
+    public override NodeCompilationResult VisitItem(AwkParser.ItemContext context)
     {
         if (context.FUNCTION() != null)
         {
@@ -41,9 +41,9 @@ class CodeGenerator : AwkBaseVisitor<string?>
             // correct scope for function
 
             currentScope = previousScope;
-            return null;
+            return new NodeCompilationResult();
         }
-        return null;
+        return new NodeCompilationResult();
     }
 
     public void Close() { stream.Close(); } //TODO potential errors if closed more than one time
