@@ -9,23 +9,24 @@ namespace AwkToC.CodeGeneration;
 class CodeGenerator : AwkBaseVisitor<string?>
 {
     SymbolTable symbolTable;
-    StreamWriter stream;
+    CWriter stream;
     private string currentScope = "global";
 
-    public CodeGenerator(SymbolTable symbolTable, StreamWriter stream)
+    public CodeGenerator(SymbolTable symbolTable, string filename)
     {
         this.symbolTable = symbolTable;
-        this.stream = stream;
+        stream = new CWriter(filename);
     }
 
     public override string? VisitProgram(AwkParser.ProgramContext context)
     {
-        stream.Write("#include<stdio.h>\n" +
-                     "int main()\n" + 
-                     "{\n" +
-                     "  printf(\"test\\n\");\n" +
-                     "  return 0;\n" +
-                     "}\n");
+        stream.WriteLine("#include<stdio.h>");
+        stream.HSpace(2);
+        stream.WriteLine("int main()");
+        stream.EnterBlock();
+        stream.WriteLine("printf(\"test\\n\");");
+        stream.WriteLine("return 0;");
+        stream.ExitBlock();
         return VisitChildren(context);
     }
 
@@ -44,4 +45,6 @@ class CodeGenerator : AwkBaseVisitor<string?>
         }
         return null;
     }
+
+    public void Close() { stream.Close(); } //TODO potential errors if closed more than one time
 }
