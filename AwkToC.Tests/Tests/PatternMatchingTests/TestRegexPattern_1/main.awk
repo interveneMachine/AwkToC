@@ -1,0 +1,3 @@
+/line/ {
+    print "matched";
+}

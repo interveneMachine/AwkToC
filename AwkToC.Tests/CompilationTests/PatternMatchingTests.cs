@@ -36,7 +36,14 @@ public class PatternMatchingTests
 
     [Theory]
     [InlineData("TestBeginPattern_0")]
+    [InlineData("TestBeginPattern_1")]
     [InlineData("TestEndPattern_0")]
+    [InlineData("TestEndPattern_1")]
+    [InlineData("TestExprPattern_0")]
+    [InlineData("TestExprPattern_1")]
+    [InlineData("TestRegexPattern_0")]
+    [InlineData("TestRegexPattern_1")]
+    [InlineData("TestRegexPattern_2")]
     void CompilationResultsInCorrectBehaviour(string testdir)
     {
         // tests are executed in /bin/Debug/net8.0 so we need to get back by with ..
