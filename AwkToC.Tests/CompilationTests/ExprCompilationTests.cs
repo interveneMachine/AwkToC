@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace AwkToC.Tests.CompilationTests;
 
-public class FunctionCompilationTests
+public class ExprCompilationTests
 {
     public static bool CompareFiles(string firstFilePath, string secondFilePath)
     {
@@ -35,20 +35,29 @@ public class FunctionCompilationTests
     }
 
     [Theory]
-    [InlineData("TestEmptyFunction_0")]
-    [InlineData("TestExprFunction_0")]
-    [InlineData("TestReturnFunction_0")]
-    [InlineData("TestParamFunction_0")]
-    [InlineData("TestParamFunction_1")]
-    [InlineData("TestParamFunction_2")]
-    [InlineData("TestParamFunction_3")]
-    [InlineData("TestReturnFunction_1")]
-    [InlineData("TestGlobalVariablesFunction_0")]
-    [InlineData("TestGlobalVariablesFunction_1")]
+    [InlineData("TestDecrExpr_0")]
+    [InlineData("TestDecrExpr_1")]
+    [InlineData("TestDecrExpr_2")]
+    [InlineData("TestIncrExpr_0")]
+    [InlineData("TestIncrExpr_1")]
+    [InlineData("TestIncrExpr_2")]
+    [InlineData("TestFieldExpr_0")]
+    [InlineData("TestFieldExpr_1")]
+    [InlineData("TestDivExpr_0")]
+    [InlineData("TestMatchExpr_0")]
+    [InlineData("TestMinusExpr_0")]
+    [InlineData("TestModExpr_0")]
+    [InlineData("TestMulExpr_0")]
+    [InlineData("TestNotExpr_0")]
+    [InlineData("TestPlusExpr_0")]
+    [InlineData("TestPowExpr_0")]
+    [InlineData("TestPowExpr_1")]
+    [InlineData("TestComparisonExpr_0")]
+    [InlineData("TestConcatenationExpr_0")]
     void CompilationResultsInCorrectBehaviour(string testdir)
     {
         // tests are executed in /bin/Debug/net8.0 so we need to get back by with ..
-        string dir = Path.Combine("..", "..", "..", "Tests", "FunctionCompilationTests", testdir);
+        string dir = Path.Combine("..", "..", "..", "Tests", "ExprCompilationTests", testdir);
         string data = Path.Combine(dir, "data.txt");
         string awkFile = Path.Combine(dir, "main.awk");
         string cFile = Path.Combine(dir, "main.c");
