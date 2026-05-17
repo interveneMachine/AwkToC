@@ -60,16 +60,51 @@ public class PatternMatchingTests
             new StreamWriter(cFile)
         );
 
-        var compile = Process.Start("/bin/gcc", $" {cFile} -o {compiled}");
+        var compile = Process.Start(new ProcessStartInfo
+        {
+            FileName = "/bin/gcc",
+            Arguments = $" {cFile} -o {compiled}",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        }) ?? throw new InvalidOperationException("Failed to start gcc process");
         compile.WaitForExit();
-        var run = Process.Start("/bin/bash", $"-c \"./{compiled} {data} > {generatedResults}\"");
+        if (compile.ExitCode != 0)
+        {
+            string stdOut = compile.StandardOutput.ReadToEnd();
+            string stdErr = compile.StandardError.ReadToEnd();
+            throw new InvalidOperationException(
+                $"GCC compilation failed with exit code {compile.ExitCode}\n" +
+                $"Command: /bin/gcc {cFile} -o {compiled}\n" +
+                $"StdOut: {stdOut}\n" +
+                $"StdErr: {stdErr}"
+            );
+        }
+
+        var run = Process.Start(new ProcessStartInfo
+        {
+            FileName = "/bin/bash",
+            Arguments = $"-c \"./{compiled} {data} > {generatedResults}\"",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        }) ?? throw new InvalidOperationException("Failed to start bash process");
         run.WaitForExit();
-        
-        Assert.True(
-            CompareFiles(generatedResults, correctResults),
-            $"results of running compiled program are different than expected in test \"{testdir}\"" +
-            "\n\nexpected:\n" + File.ReadAllText(correctResults) +
-            "\n\ngenerated:\n" + File.ReadAllText(generatedResults)
+        if (run.ExitCode != 0)
+        {
+            string stdOut = run.StandardOutput.ReadToEnd();
+            string stdErr = run.StandardError.ReadToEnd();
+            throw new InvalidOperationException(
+                $"running compiled program failed with exit code {run.ExitCode}\n" +
+                $"Command: /bin/bash -c \"./{compiled} {data} > {generatedResults}\"\n" +
+                $"StdOut: {stdOut}\n" +
+                $"StdErr: {stdErr}"
+            );
+        }
+    
+        Assert.Equal(
+            File.ReadAllText(correctResults),
+            File.ReadAllText(generatedResults)
         );
 
         File.Delete(cFile);
