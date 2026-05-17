@@ -54,6 +54,9 @@ public class ExprCompilationTests
     [InlineData("TestPowExpr_1")]
     [InlineData("TestComparisonExpr_0")]
     [InlineData("TestConcatenationExpr_0")]
+    [InlineData("TestAssignExpr_0")]
+    [InlineData("TestAndExpr_0")]
+    [InlineData("TestOrExpr_0")]
     void CompilationResultsInCorrectBehaviour(string testdir)
     {
         // tests are executed in /bin/Debug/net8.0 so we need to get back by with ..
