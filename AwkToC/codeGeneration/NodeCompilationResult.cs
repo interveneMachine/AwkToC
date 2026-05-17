@@ -2,6 +2,17 @@ namespace AwkToC.CodeGeneration;
 
 class NodeCompilationResult
 {
-    string? ReturnName = null; // variable name in C
-    CType? Type = null; // type of variable in C
+    public string? ReturnName { get; set; }
+
+    public CType? Type { get; set; }
+
+    public NodeCompilationResult()
+    {
+    }
+
+    public NodeCompilationResult(string returnName, CType type)
+    {
+        ReturnName = returnName;
+        Type = type;
+    }
 }
