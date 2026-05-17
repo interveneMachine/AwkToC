@@ -4,36 +4,6 @@ namespace AwkToC.Tests.CompilationTests;
 
 public class PatternMatchingTests
 {
-    public static bool CompareFiles(string firstFilePath, string secondFilePath)
-    {
-        const int bufferSize = 1024;
-        using var stream1 = new FileStream(firstFilePath, FileMode.Open, FileAccess.Read);
-        using var stream2 = new FileStream(secondFilePath, FileMode.Open, FileAccess.Read);
-        if (stream1.Length != stream2.Length)
-        {
-            return false;
-        }
-        Span<byte> buffer1 = new byte[bufferSize];
-        Span<byte> buffer2 = new byte[bufferSize];
-        while (true)
-        {
-            var bytesRead1 = stream1.Read(buffer1);
-            var bytesRead2 = stream2.Read(buffer2);
-            if (bytesRead1 != bytesRead2)
-            {
-                return false;
-            }
-            if (bytesRead1 == 0)
-            {
-                return true;
-            }
-            if (!buffer1.SequenceEqual(buffer2))
-            {
-                return false;
-            }
-        }
-    }
-
     [Theory]
     [InlineData("TestBeginPattern_0")]
     [InlineData("TestBeginPattern_1")]
