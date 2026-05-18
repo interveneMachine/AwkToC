@@ -15,7 +15,39 @@ Projekt skupia się na:
 
 # Uruchamianie
 
-dotnet run
+```console
+dotnet run --project AwkToC
+```
+
+# Kompilacja
+
+```console
+dotnet build
+```
+
+skompilowany program znajduje się w AwkToC/bin/Debug/net8.0/AwkToC
+
+# Używanie
+
+po skompilowaniu:
+```console
+AwkToC
+```
+
+lub:
+```console
+dotnet run --project AwkToC
+```
+
+stworzony zostanie plik main.c który można skompilować za pomocą:
+```console
+gcc main.c runtime/awk_runtime.c -o main.out -I runtime/ -lm
+```
+
+by uruchomić skompilowany program awk na [filename] należy uruchomić
+```console
+./main.out [filename]
+```
 
 # Implementcja
 
