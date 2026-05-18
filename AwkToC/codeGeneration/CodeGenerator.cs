@@ -171,7 +171,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.EnterBlock();
 
             Visit(context.action());
-
+            stream.WriteLine("return awk_undefined();");
             stream.ExitBlock();
             currentScope = previousScope;
             
@@ -338,6 +338,74 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         return expressions;
     }
 
+    private List<AwkParser.ExprContext> CollectFunctionArguments(
+    AwkParser.Expr_list_optContext? context
+)
+{
+    List<AwkParser.ExprContext> arguments = new();
+
+    if (context == null || context.expr_list() == null)
+    {
+        return arguments;
+    }
+
+    CollectExprList(context.expr_list(), arguments);
+    return arguments;
+}
+
+private void CollectExprList(
+    AwkParser.Expr_listContext context,
+    List<AwkParser.ExprContext> arguments
+)
+{
+    if (context.expr() != null)
+    {
+        arguments.Add(context.expr());
+        return;
+    }
+
+    if (context.multiple_expr_list() != null)
+    {
+        CollectMultipleExprList(
+            context.multiple_expr_list(),
+            arguments
+        );
+    }
+}
+
+private void CollectMultipleExprList(
+    AwkParser.Multiple_expr_listContext context,
+    List<AwkParser.ExprContext> arguments
+)
+{
+    if (context.multiple_expr_list() != null)
+    {
+        CollectMultipleExprList(
+            context.multiple_expr_list(),
+            arguments
+        );
+
+        var expressions = context.expr();
+
+        if (expressions.Length != 1)
+        {
+            throw new InvalidOperationException(
+                "Unexpected function argument list structure."
+            );
+        }
+
+        arguments.Add(expressions[0]);
+        return;
+    }
+
+    var baseExpressions = context.expr();
+
+    foreach (var expression in baseExpressions)
+    {
+        arguments.Add(expression);
+    }
+}
+
     public override NodeCompilationResult VisitExpr(
         AwkParser.ExprContext context
     )
@@ -357,6 +425,55 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 $"awk_string({context.STRING().GetText()})"
             );
         }
+        if (
+    context.NAME() != null &&
+    context.LPAREN() != null &&
+    context.RPAREN() != null
+)
+{
+    string functionName = context.NAME().GetText();
+
+    Symbol functionSymbol =
+        symbolTable.Lookup(functionName, "global")
+        ?? throw new ArgumentException(
+            $"Function '{functionName}' is not defined."
+        );
+
+    if (functionSymbol.Type != SymbolType.Function)
+    {
+        throw new ArgumentException(
+            $"Symbol '{functionName}' is not a function."
+        );
+    }
+
+    string functionNameInC =
+        functionSymbol.NameInC
+        ?? throw new Exception(
+            $"Function '{functionName}' has NameInC=null."
+        );
+
+    List<AwkParser.ExprContext> arguments =
+        CollectFunctionArguments(context.expr_list_opt());
+
+    List<string> compiledArgumentNames = new();
+
+    foreach (var argument in arguments)
+    {
+        NodeCompilationResult argumentResult =
+            Visit(argument);
+
+        compiledArgumentNames.Add(
+            RequireReturnName(argumentResult, "function argument")
+        );
+    }
+
+    string joinedArguments =
+        string.Join(", ", compiledArgumentNames);
+
+    return EmitTemporary(
+        $"{functionNameInC}({joinedArguments})"
+    );
+}
 
         AwkParser.ExprContext[] nestedExpressions = context.expr();
 
