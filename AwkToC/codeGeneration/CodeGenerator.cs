@@ -338,6 +338,49 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         return expressions;
     }
 
+    public override NodeCompilationResult VisitTerminatable_statement(
+    AwkParser.Terminatable_statementContext context
+)
+{
+    // return 
+    // return expr 
+    if (context.RETURN() != null)
+    {
+        if (!currentScope.StartsWith("function:"))
+        {
+            throw new ArgumentException(
+                "'return' can be used only inside a function."
+            );
+        }
+
+        AwkParser.ExprContext? returnExpression =
+            context.expr_opt()?.expr();
+
+        // return 
+        if (returnExpression == null)
+        {
+            stream.WriteLine("return awk_undefined();");
+            return new NodeCompilationResult();
+        }
+
+        // return expr
+        NodeCompilationResult expressionResult =
+            Visit(returnExpression);
+
+        string expressionName =
+            RequireReturnName(
+                expressionResult,
+                "return expression"
+            );
+
+        stream.WriteLine($"return {expressionName};");
+
+        return new NodeCompilationResult();
+    }
+
+    return VisitChildren(context);
+}
+
     private List<AwkParser.ExprContext> CollectFunctionArguments(
     AwkParser.Expr_list_optContext? context
 )
