@@ -1,3 +1,4 @@
+using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
 
 namespace AwkToC.CodeGeneration;
@@ -9,6 +10,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     private string currentScope = "global";
     private int temporaryCounter = 0;
+    private int patternCounter = 0;
+    private int itemCounter = 0;
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
@@ -19,6 +22,16 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     private string NewTemporaryName()
     {
         return $"tmp{temporaryCounter++}";
+    }
+
+    private string NewPatternName()
+    {
+        return $"pattern{patternCounter++}";
+    }
+
+    private string NewItemName()
+    {
+        return $"item{itemCounter++}";
     }
 
     private NodeCompilationResult EmitTemporary(string cExpression)
@@ -56,11 +69,46 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream.WriteLine("#include \"awk_runtime.h\"");
         stream.HSpace(1);
 
-        stream.WriteLine("int main(void)");
+        stream.WriteLine("Fields fields;");
+
+        symbolTable.All()
+                   .Where(s => s.Type == SymbolType.Variable)
+                   .Select(s => s.NameInC
+                        ?? throw new Exception($"variable {s.Name} in global has NameInC=null"))
+                   .ToList()
+                   .ForEach(name => stream.WriteLine($"AwkValue {name};"));
+
+        string? begin = null, end = null;
+        List<string> itemsResults = new();
+        foreach(var i in context.item())
+        {
+            NodeCompilationResult result = Visit(i);
+            if(i.pattern() is not null && i.pattern().BEGIN() is not null)
+                begin = RequireReturnName(result, "begin item");
+            else if(i.pattern() is not null && i.pattern().END() is not null)
+                end = RequireReturnName(result, "end item");
+            else if(result.Type == CType.ItemFunction)
+                itemsResults.Add(RequireReturnName(result, "item"));
+        }
+        
+        stream.WriteLine("int main(int argc, char* argv[])");
         stream.EnterBlock();
+        if (begin is not null) stream.WriteLine($"{begin}();");
+        stream.WriteLine("FILE* file = fopen(argv[1], \"r\");");
+        stream.WriteLine("char buffer[1024];");
+        
+        stream.WriteLine("while(fgets(buffer, sizeof(buffer), file))");
+        stream.EnterBlock();
+        stream.WriteLine("remove_newline(buffer);");
+        stream.WriteLine("fields = fields_string(buffer);");
+        itemsResults.Select(function => $"{function}();")
+                    .ToList().ForEach(stream.WriteLine);
+        stream.WriteLine("fields_free(&fields);");
+        stream.ExitBlock();
 
-        VisitChildren(context);
+        if (end is not null) stream.WriteLine($"{end}();");
 
+        stream.WriteLine("fclose(file);");
         stream.WriteLine("return 0;");
         stream.ExitBlock();
 
@@ -71,17 +119,146 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         AwkParser.ItemContext context
     )
     {
-        if (
-            context.pattern() != null &&
-            context.pattern().BEGIN() != null &&
-            context.action() != null
-        )
+        // pattern action
+        if (context.pattern() is not null)
         {
+            string itemName = NewItemName();
+            string patternName = "";
+            bool isSpecial = context.pattern().BEGIN() is not null
+                          || context.pattern().END() is not null;
+            
+            if (!isSpecial)
+            {
+                NodeCompilationResult patternResult = Visit(context.pattern());
+                patternName = RequireReturnName(patternResult, "item -> pattern action");
+            }
+            
+            stream.WriteLine($"void {itemName}()");
+            stream.EnterBlock();
+
+            if (!isSpecial)
+            {
+                stream.WriteLine($"if({patternName}())");
+                stream.EnterBlock();
+            }
+
             Visit(context.action());
+
+            if (!isSpecial) stream.ExitBlock();
+            stream.ExitBlock();
+
+            return new NodeCompilationResult(
+                itemName,
+                CType.ItemFunction
+            );
+        }
+
+        // FUNCTION NAME ( param_list_opt ) newline_opt action
+        if (context.FUNCTION() is not null)
+        {
+            string name = context.NAME().GetText();
+            Symbol function = symbolTable.Lookup(name, currentScope)
+                ?? throw new ArgumentException($"function {name} in {currentScope} is missing from symbolTable");
+            string functionName = function.NameInC
+                ?? throw new Exception($"function {name} in {currentScope} has NameInC=null");
+            string previousScope = currentScope;
+            currentScope = $"function:{name}";
+
+            string parameters = string.Join(", ", symbolTable.All()
+                .Where(s => s.Scope == currentScope && s.Type == SymbolType.Parameter)
+                .Select(s => $"AwkValue {s.NameInC}"));
+            stream.WriteLine($"AwkValue {functionName}({parameters})");
+            stream.EnterBlock();
+
+            Visit(context.action());
+
+            stream.ExitBlock();
+            currentScope = previousScope;
+            
             return new NodeCompilationResult();
         }
 
-        return new NodeCompilationResult();
+        // action
+        if (context.action() is not null)
+        {
+            string itemNameAction = NewItemName();
+            stream.WriteLine($"void {itemNameAction}()");
+            stream.EnterBlock();
+
+            Visit(context.action());
+
+            stream.ExitBlock();
+            return new NodeCompilationResult(
+                itemNameAction,
+                CType.ItemFunction
+            );
+        }
+        
+        // simple_pattern
+        string itemNameSimplePattern = NewItemName();
+        NodeCompilationResult simplePatternResult = Visit(context.pattern());
+        string simplePatternName = RequireReturnName(simplePatternResult, "item -> simple_pattern");
+        
+        stream.WriteLine($"void {itemNameSimplePattern}()");
+        stream.EnterBlock();
+
+        stream.WriteLine($"if({simplePatternName}())");
+        stream.EnterBlock();
+
+        stream.WriteLine("awk_print_value(fields_get(fields, 0));");
+
+        stream.ExitBlock();
+        stream.ExitBlock();
+        return new NodeCompilationResult(
+            itemNameSimplePattern,
+            CType.ItemFunction
+        );
+    }
+
+    public override NodeCompilationResult VisitPattern([NotNull] AwkParser.PatternContext context)
+    {
+        string patternName = NewPatternName();
+        stream.WriteLine($"int {patternName}()");
+        stream.EnterBlock();
+        
+        // BEGIN
+        if (context.BEGIN() is not null)
+        {
+            stream.WriteLine("return isBegin;");
+        }
+
+        // END
+        else if (context.END() is not null)
+        {
+            stream.WriteLine("return isEnd;");
+        }
+
+        // expr ',' newline_opt expr
+        else if (context.COMMA() is not null)
+        {
+            throw new NotSupportedException(
+                "expr ',' newline_opt expr nie jest obsługiwane"
+            );
+        }
+
+        // expr
+        else
+        {
+            NodeCompilationResult exprResult = Visit(context.expr()[0]);
+            string exprName = RequireReturnName(exprResult, "pattern -> expr");
+            stream.WriteLine($"return awk_is_truthy({exprName});");
+        }
+
+        stream.ExitBlock();
+        return new NodeCompilationResult(
+            patternName,
+            CType.Function
+        );
+    }
+
+    public override NodeCompilationResult VisitSimple_pattern([NotNull] AwkParser.Simple_patternContext context)
+    {
+        return base.VisitSimple_pattern(context);
     }
 
     public override NodeCompilationResult VisitSimple_print_statement(
@@ -190,6 +367,22 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         )
         {
             return Visit(nestedExpressions[0]);
+        }
+
+        if (
+            context.DOLLAR() != null &&
+            nestedExpressions.Length == 1
+        )
+        {
+            NodeCompilationResult value =
+                Visit(nestedExpressions[0]);
+            
+            string valueName =
+                RequireReturnName(value, "field operator");
+            
+            return EmitTemporary(
+                $"fields_get(fields, awk_to_int({valueName}))"
+            );
         }
 
         if (

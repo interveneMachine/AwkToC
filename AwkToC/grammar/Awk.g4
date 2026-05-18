@@ -3,13 +3,7 @@ grammar Awk;
 //parser rules
 
 program
-    : terminator? item_list
-    | terminator? item_list item
-    ;
-
-item_list
-    : /* empty */
-    | item_list item terminator
+    : terminator? (item terminator)* item?
     ;
 
 item

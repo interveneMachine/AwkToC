@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <regex.h>
+
+char* FS = " ";
 
 
 static char* awk_strdup(const char* value)
@@ -39,6 +42,186 @@ static AwkValue awk_bool(int value)
     return awk_number(value ? 1.0 : 0.0);
 }
 
+void remove_newline(char *value)
+{
+    int i = 0;
+    while(value[i] != '\n') i++;
+    value[i] = '\0';
+}
+
+Fields fields_string(char *value)
+{
+    Fields result;
+    result.data = NULL;
+    result.size = 0;
+
+    if (value == NULL || value[0] == '\0')
+    {
+        return result;
+    }
+
+    regex_t regex;
+    int regcomp_result = regcomp(&regex, FS, REG_EXTENDED);
+    
+    if (regcomp_result != 0)
+    {
+        fprintf(stderr, "Failed to compile regex for FS\n");
+        return result;
+    }
+
+    // First pass: count number of fields and collect match positions
+    size_t match_count = 0;
+    regmatch_t *matches = NULL;
+    char *ptr = value;
+    size_t offset = 0;
+    
+    while (offset < strlen(value))
+    {
+        regmatch_t match;
+        if (regexec(&regex, ptr, 1, &match, 0) == 0 && match.rm_so != -1)
+        {
+            if (match.rm_eo == match.rm_so)
+            {
+                // Empty match, skip one character to avoid infinite loop
+                offset++;
+                ptr = value + offset;
+                continue;
+            }
+
+            // Resize matches array
+            regmatch_t *new_matches = (regmatch_t*)realloc(matches, (match_count + 1) * sizeof(regmatch_t));
+            if (new_matches == NULL)
+            {
+                fprintf(stderr, "Memory allocation failed\n");
+                free(matches);
+                regfree(&regex);
+                exit(1);
+            }
+            matches = new_matches;
+            
+            // Store match with absolute position
+            matches[match_count].rm_so = offset + match.rm_so;
+            matches[match_count].rm_eo = offset + match.rm_eo;
+            match_count++;
+            
+            offset += match.rm_eo;
+            ptr = value + offset;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    // Number of fields = number of matches + 1
+    size_t field_count = match_count + 1;
+    result.data = (char**)malloc(field_count * sizeof(char*));
+    if (result.data == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        free(matches);
+        regfree(&regex);
+        exit(1);
+    }
+
+    // Extract fields
+    size_t field_start = 0;
+    
+    for (size_t i = 0; i < match_count; i++)
+    {
+        size_t field_length = matches[i].rm_so - field_start;
+        char* field = (char*)malloc(field_length + 1);
+        if (field == NULL)
+        {
+            fprintf(stderr, "Memory allocation failed\n");
+            free(matches);
+            regfree(&regex);
+            exit(1);
+        }
+
+        strncpy(field, value + field_start, field_length);
+        field[field_length] = '\0';
+        result.data[result.size++] = field;
+        
+        field_start = matches[i].rm_eo;
+    }
+
+    // Add the last field
+    size_t remaining_length = strlen(value) - field_start;
+    char* last_field = (char*)malloc(remaining_length + 1);
+    if (last_field == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        free(matches);
+        regfree(&regex);
+        exit(1);
+    }
+    strcpy(last_field, value + field_start);
+    result.data[result.size++] = last_field;
+
+    free(matches);
+    regfree(&regex);
+    return result;
+}
+
+AwkValue fields_get(Fields fields, int id)
+{
+    if (id < 0)
+    {
+        fprintf(stderr, "field expression does not suppor negative values");
+        exit(1);
+    }
+    if (id == 0)
+    {
+        // Concatenate all fields with FS separator to reconstruct $0
+        size_t total_size = 0;
+        for (size_t i = 0; i < fields.size; i++)
+        {
+            total_size += strlen(fields.data[i]);
+            if (i < fields.size - 1)
+            {
+                total_size += strlen(FS);
+            }
+        }
+        
+        char* result = malloc(total_size + 1);
+        if (result == NULL)
+        {
+            fprintf(stderr, "Memory allocation failed\n");
+            exit(1);
+        }
+        
+        result[0] = '\0';
+        for (size_t i = 0; i < fields.size; i++)
+        {
+            strcat(result, fields.data[i]);
+            if (i < fields.size - 1)
+            {
+                strcat(result, FS);
+            }
+        }
+        
+        AwkValue value = awk_string(result);
+        free(result);
+        return value;
+    }
+    return awk_string(fields.data[id-1]);
+}
+
+AwkValue fields_assign(Fields* fields, int id, AwkValue value)
+{
+    // TODO
+    return awk_string("text");
+}
+
+void fields_free(Fields* value)
+{
+    if(value == NULL || value->data == NULL)
+        return;
+    free(value->data);
+    value->size = 0;
+    value->data = NULL;
+}
 
 AwkValue awk_undefined(void)
 {
@@ -152,6 +335,20 @@ int awk_is_truthy(AwkValue value)
     return 0;
 }
 
+int awk_to_int(AwkValue value)
+{
+    if (value.type == AWK_STRING)
+    {
+        return atoi(value.string);
+    }
+
+    if (value.type == AWK_NUMBER)
+    {
+        return (int)value.number;
+    }
+
+    return -1; // error value
+}
 
 AwkValue awk_add(AwkValue left, AwkValue right)
 {

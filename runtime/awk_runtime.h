@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+extern char* FS;
+
 typedef enum
 {
     AWK_UNDEFINED,
@@ -17,6 +19,18 @@ typedef struct
     char* string;
 } AwkValue;
 
+typedef struct
+{
+    char** data;
+    size_t size;
+} Fields;
+
+void remove_newline(char* value);
+Fields fields_string(char* value);
+AwkValue fields_get(Fields fields, int id);
+AwkValue fields_assign(Fields* fields, int id, AwkValue value);
+void fields_free(Fields* value);
+
 
 AwkValue awk_undefined(void);
 AwkValue awk_number(double value);
@@ -28,6 +42,7 @@ void awk_free(AwkValue* value);
 double awk_to_number(AwkValue value);
 char* awk_to_string(AwkValue value);
 int awk_is_truthy(AwkValue value);
+int awk_to_int(AwkValue value);
 
 
 
