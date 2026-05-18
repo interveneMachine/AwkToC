@@ -31,6 +31,8 @@ public class ExprCompilationTests
     {
         // tests are executed in /bin/Debug/net8.0 so we need to get back by with ..
         string dir = Path.Combine("..", "..", "..", "Tests", "ExprCompilationTests", testdir);
+        string runtime = Path.Combine(dir, "..", "..", "..", "..", "runtime");
+        string runtimeC = Path.Combine(runtime, "awk_runtime.c");
         string data = Path.Combine(dir, "data.txt");
         string awkFile = Path.Combine(dir, "main.awk");
         string cFile = Path.Combine(dir, "main.c");
@@ -46,7 +48,7 @@ public class ExprCompilationTests
         var compile = Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/gcc",
-            Arguments = $" {cFile} -o {compiled}",
+            Arguments = $" {cFile} {runtimeC} -o {compiled} -I {runtime} -lm",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true

@@ -18,6 +18,8 @@ public class PatternMatchingTests
     {
         // tests are executed in /bin/Debug/net8.0 so we need to get back by with ..
         string dir = Path.Combine("..", "..", "..", "Tests", "PatternMatchingTests", testdir);
+        string runtime = Path.Combine(dir, "..", "..", "..", "..", "runtime");
+        string runtimeC = Path.Combine(runtime, "awk_runtime.c");
         string data = Path.Combine(dir, "data.txt");
         string awkFile = Path.Combine(dir, "main.awk");
         string cFile = Path.Combine(dir, "main.c");
@@ -33,7 +35,7 @@ public class PatternMatchingTests
         var compile = Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/gcc",
-            Arguments = $" {cFile} -o {compiled}",
+            Arguments = $" {cFile} {runtimeC} -o {compiled} -I {runtime} -lm",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true
