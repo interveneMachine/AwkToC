@@ -610,6 +610,55 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 $"awk_unary_minus({valueName})"
             );
         }
+        if (nestedExpressions.Length == 1)
+        {
+            if (context.ASSIGN() != null)
+            {
+                NodeCompilationResult lvalue =
+                    Visit(context.lvalue());
+                
+                string lvalueName =
+                    RequireReturnName(lvalue, "assign(lvalue)");
+                
+                NodeCompilationResult value =
+                    Visit(nestedExpressions[0]);
+
+                string valueName =
+                    RequireReturnName(value, "assign(expr)");
+
+                return EmitTemporary(
+                    $"({lvalueName} = {valueName})"
+                );
+            }
+
+            if (context.lvalue() != null)
+            {
+                 NodeCompilationResult lvalue =
+                    Visit(context.lvalue());
+                
+                string lvalueName =
+                    RequireReturnName(lvalue, "assign(lvalue)");
+                
+                NodeCompilationResult value =
+                    Visit(nestedExpressions[0]);
+
+                string valueName =
+                    RequireReturnName(value, "assign(expr)");
+                
+                string operationSymbol;
+                if      (context.ADD_ASSIGN() != null) operationSymbol = "awk_add";
+                else if (context.SUB_ASSIGN() != null) operationSymbol = "awk_sub";
+                else if (context.MUL_ASSIGN() != null) operationSymbol = "awk_mul";
+                else if (context.DIV_ASSIGN() != null) operationSymbol = "awk_div";
+                else if (context.MOD_ASSIGN() != null) operationSymbol = "awk_mod";
+                else if (context.POW_ASSIGN() != null) operationSymbol = "awk_pow";
+                else throw new Exception("unable to match expr rule");
+
+                return EmitTemporary(
+                    $"({lvalueName} = {operationSymbol}({lvalueName}, {valueName}))"
+                );
+            }
+        }
 
         if (nestedExpressions.Length == 2)
         {

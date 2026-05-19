@@ -143,6 +143,10 @@ expr_opt
 expr
     : LPAREN expr RPAREN
     | DOLLAR expr
+    | lvalue INCR
+    | lvalue DECR
+    | INCR lvalue
+    | DECR lvalue
     | expr INCR
     | expr DECR
     | INCR expr

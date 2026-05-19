@@ -45,7 +45,7 @@ static AwkValue awk_bool(int value)
 void remove_newline(char *value)
 {
     int i = 0;
-    while(value[i] != '\n') i++;
+    while(value[i] != '\n' && value[i] != '\0') i++;
     value[i] = '\0';
 }
 
