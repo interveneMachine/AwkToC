@@ -171,6 +171,10 @@ AwkValue fields_get(Fields fields, int id)
         fprintf(stderr, "field expression does not suppor negative values");
         exit(1);
     }
+    if (id > fields.size)
+    {
+        return awk_undefined();
+    }
     if (id == 0)
     {
         // Concatenate all fields with FS separator to reconstruct $0
