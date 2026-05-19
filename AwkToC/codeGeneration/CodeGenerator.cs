@@ -530,13 +530,63 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         AwkParser.ExprContext[] nestedExpressions = context.expr();
 
-        // lvalue
         if (
             context.lvalue() != null &&
             nestedExpressions.Length == 0
         )
         {
-            return Visit(context.lvalue());
+            NodeCompilationResult lvalue = 
+                Visit(context.lvalue());
+            string lvalueName =
+                RequireReturnName(lvalue, "lvalue");
+            
+            // lvalue
+            if (context.ChildCount == 1)
+                return EmitTemporary(
+                    $"{lvalueName}"
+                );
+
+            // INCR lvalue
+            if (context.GetChild(0).GetText() == "++")
+            {
+                return EmitTemporary(
+                    $"({lvalueName} = awk_add({lvalueName}, awk_number(1)))"
+                );
+            }
+
+            // DECR lvalue
+            else if (context.GetChild(0).GetText() == "--")
+            {
+                return EmitTemporary(
+                    $"({lvalueName} = awk_sub({lvalueName}, awk_number(1)))"
+                );
+            }
+
+            // lvalue INCR
+            else if (context.GetChild(1).GetText() == "++")
+            {
+                NodeCompilationResult result = EmitTemporary(
+                    $"awk_copy({lvalueName})"
+                );
+                stream.WriteLine(
+                    $"{lvalueName} = awk_add({lvalueName}, awk_number(1));"
+                );
+                return result;
+            }
+
+            // lvalue DECR
+            else if (context.GetChild(1).GetText() == "--")
+            {
+                NodeCompilationResult result = EmitTemporary(
+                    $"awk_copy({lvalueName})"
+                );
+                stream.WriteLine(
+                    $"{lvalueName} = awk_sub({lvalueName}, awk_number(1));"
+                );
+                return result;
+            }
+
+            throw new Exception("unknown rule");
         }
         if (
             context.LPAREN() != null &&
@@ -612,6 +662,32 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
         if (nestedExpressions.Length == 1)
         {
+            // INCR expr / expr INCR
+            if (context.INCR() != null)
+            {
+                NodeCompilationResult value = 
+                    Visit(nestedExpressions[0]);
+                
+                string valueName =
+                    RequireReturnName(value, "expr");
+                
+                return EmitTemporary(
+                    $"awk_add({valueName}, awk_number(1))"
+                );
+            }
+            // DECR expr / expr DECR
+            if (context.DECR() != null)
+            {
+                NodeCompilationResult value = 
+                    Visit(nestedExpressions[0]);
+                
+                string valueName =
+                    RequireReturnName(value, "expr");
+                
+                return EmitTemporary(
+                    $"awk_sub({valueName}, awk_number(1))"
+                );
+            }
             if (context.ASSIGN() != null)
             {
                 NodeCompilationResult lvalue =
