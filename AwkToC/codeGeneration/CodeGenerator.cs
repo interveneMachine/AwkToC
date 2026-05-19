@@ -188,7 +188,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         
         // simple_pattern
         string itemNameSimplePattern = symbolTable.NewItemCName();
-        NodeCompilationResult simplePatternResult = Visit(context.pattern());
+        NodeCompilationResult simplePatternResult = Visit(context.simple_pattern());
         string simplePatternName = RequireReturnName(simplePatternResult, "item -> simple_pattern");
         
         stream.WriteLine($"void {itemNameSimplePattern}()");
@@ -512,6 +512,20 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         AwkParser.ExprContext[] nestedExpressions = context.expr();
 
+        // ERE
+        if (
+            context.ERE() != null &&
+            nestedExpressions.Length == 0
+        )
+        {
+            string ere = context.ERE().GetText();
+            ere = ere.Trim('/').Replace("\\/", "/");
+
+            return EmitTemporary(
+                $"awk_match(fields_get(fields, 0), \"{ere}\")"
+            );
+        }
+
         if (
             context.lvalue() != null &&
             nestedExpressions.Length == 0
@@ -714,6 +728,36 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
                 return EmitTemporary(
                     $"({lvalueName} = {operationSymbol}({lvalueName}, {valueName}))"
+                );
+            }
+
+            if (context.MATCH() != null)
+            {
+                NodeCompilationResult value = 
+                    Visit(nestedExpressions[0]);
+                
+                string valueName = 
+                    RequireReturnName(value, "MATCH");
+                
+                string ere = context.ERE().GetText();
+                ere = ere.Trim('/').Replace("\\/", "/");
+                return EmitTemporary(
+                    $"awk_match({valueName}, \"{ere}\")"
+                );
+            }
+
+            if (context.NO_MATCH() != null)
+            {
+                NodeCompilationResult value = 
+                    Visit(nestedExpressions[0]);
+                
+                string valueName = 
+                    RequireReturnName(value, "NO_MATCH");
+                
+                string ere = context.ERE().GetText();
+                ere = ere.Trim('/').Replace("\\/", "/");
+                return EmitTemporary(
+                    $"awk_not(awk_match({valueName}, \"{ere}\"))"
                 );
             }
         }

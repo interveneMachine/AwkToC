@@ -36,6 +36,7 @@ AwkValue awk_undefined(void);
 AwkValue awk_number(double value);
 AwkValue awk_string(const char* value);
 AwkValue awk_copy(AwkValue value);
+AwkValue awk_match(AwkValue value, const char* regex_cstring);
 void awk_free(AwkValue* value);
 
 

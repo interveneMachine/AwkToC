@@ -167,8 +167,10 @@ expr
     | expr EQ expr
     | expr GT expr
     | expr GE expr
-    | expr MATCH expr
-    | expr NO_MATCH expr
+    | ERE MATCH expr // changed from expr MATCH expr
+    | ERE NO_MATCH expr // changed from expr NO_MATCH expr
+    | expr MATCH ERE
+    | expr NO_MATCH ERE
     | expr IN NAME
     | LPAREN multiple_expr_list RPAREN IN NAME //TODO
     | expr AND newline_opt expr
