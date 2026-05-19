@@ -27,19 +27,11 @@ public class PatternMatchingTests
         string correctResults = Path.Combine(dir, "results.txt");
         string generatedResults = Path.Combine(dir, "generatedResults.txt");
         
-        var sw = new StreamWriter(cFile);
-        try {
-            AwkToC.Compiler.Compiler.Compile(
-                new StreamReader(awkFile),
-                sw
-            );
-        }
-        catch (Exception e)
-        {
-            sw.Close();
-            throw;
-        }
-
+        AwkToC.Compiler.Compiler.Compile(
+            new StreamReader(awkFile),
+            new StreamWriter(cFile)
+        );
+        
         var compile = Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/gcc",
