@@ -168,8 +168,9 @@ AwkValue fields_get(Fields fields, int id)
 {
     if (id < 0)
     {
-        fprintf(stderr, "field expression does not suppor negative values");
-        exit(1);
+        id = fields.size + id + 1;
+        if (id <= 0)
+            return awk_undefined();
     }
     if (id > fields.size)
     {
