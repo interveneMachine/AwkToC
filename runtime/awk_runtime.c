@@ -66,7 +66,7 @@ Fields fields_string(char *value)
     if (regcomp_result != 0)
     {
         fprintf(stderr, "Failed to compile regex for FS\n");
-        return result;
+        exit(1);
     }
 
     // First pass: count number of fields and collect match positions
@@ -278,6 +278,11 @@ AwkValue awk_match(AwkValue value, const char* regex_cstring)
     regex_t regex;
     regmatch_t  pmatch[1];
     int result = regcomp(&regex, regex_cstring, REG_EXTENDED);
+    if (result != 0)
+    {
+        fprintf(stderr, "Failed to compile regex\n");
+        exit(1);
+    }
     size_t n_match = 1;
     int is_match = regexec(&regex, s, n_match, pmatch, 0);
     if (is_match)
