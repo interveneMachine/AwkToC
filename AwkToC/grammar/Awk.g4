@@ -19,8 +19,7 @@ param_list_opt
     ;
 
 param_list
-    : NAME
-    | param_list ',' NAME
+    : NAME (',' NAME)*
     ;
 
 simple_pattern

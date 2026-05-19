@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
 
@@ -164,10 +165,19 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string previousScope = currentScope;
             currentScope = $"function:{name}";
 
-            string parameters = string.Join(", ", symbolTable.All()
-                .Where(s => s.Scope == currentScope && s.Type == SymbolType.Parameter)
-                .Select(s => $"AwkValue {s.NameInC}"));
-            stream.WriteLine($"AwkValue {functionName}({parameters})");
+            List<string> parameters = new();
+            if (context.param_list_opt() != null &&
+                context.param_list_opt().param_list() != null)
+                foreach(var parameter in context.param_list_opt().param_list().NAME())
+                {
+                    Symbol parameterSymbol = symbolTable.Lookup(parameter.GetText(), currentScope)
+                        ?? throw new Exception($"symbolTable is missing symbol for {parameter.GetText()} in {currentScope}");
+                    if(parameterSymbol.NameInC == null)
+                        throw new Exception($"symbol with name: {parameterSymbol.Name} scope: {currentScope} is missing NameInC");
+                    parameters.Add($"AwkValue {parameterSymbol.NameInC}");
+                }
+            string parameterNames = string.Join(", ", parameters);
+            stream.WriteLine($"AwkValue {functionName}({parameterNames})");
             stream.EnterBlock();
 
             Visit(context.action());
@@ -386,12 +396,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     )
     {
         List<AwkParser.ExprContext> arguments = new();
-    
+
         if (context == null || context.expr_list() == null)
         {
             return arguments;
         }
-    
+
         CollectExprList(context.expr_list(), arguments);
         return arguments;
     }
@@ -520,6 +530,14 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         AwkParser.ExprContext[] nestedExpressions = context.expr();
 
+        // lvalue
+        if (
+            context.lvalue() != null &&
+            nestedExpressions.Length == 0
+        )
+        {
+            return Visit(context.lvalue());
+        }
         if (
             context.LPAREN() != null &&
             context.RPAREN() != null &&
@@ -687,6 +705,41 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         throw new NotSupportedException(
             $"To wyrażenie nie jest jeszcze obsługiwane: {context.GetText()}"
         );
+    }
+
+    public override NodeCompilationResult VisitLvalue(
+        [NotNull] AwkParser.LvalueContext context
+    )
+    {
+        // NAME
+        if (context.NAME() != null && context.expr_list() == null)
+        {
+            string name = context.NAME().GetText();
+            Symbol symbol = symbolTable.Lookup(name, currentScope)
+                ?? throw new Exception($"missing symbol with name: {name} and scope: {currentScope}");
+            if (symbol.NameInC is null)
+                throw new Exception($"missing NameInC for symbol with name: {name} and scope: {currentScope}");
+            if (symbol.Type != SymbolType.Variable && symbol.Type != SymbolType.Parameter)
+                throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name} and scope: {currentScope}");
+            return new NodeCompilationResult(
+                symbol.NameInC,
+                CType.General
+            );
+        }
+
+        // DOLLAR expr
+        if (context.DOLLAR() != null)
+        {
+            NodeCompilationResult result = Visit(context.expr());
+            string name = RequireReturnName(result, "field expr");
+            return new NodeCompilationResult(
+                $"fields_get(fields, awk_to_int({name}))",
+                CType.General
+            );
+        }
+
+        // NAME LBRACKET expr_list RBRACKET
+        throw new NotSupportedException("list as an lvalue is not supported");
     }
 
     public void Close()

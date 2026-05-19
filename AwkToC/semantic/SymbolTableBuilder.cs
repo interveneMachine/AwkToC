@@ -45,18 +45,18 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
     }
     public override object? VisitParam_list([NotNull] AwkParser.Param_listContext context)
     {
-        var nameToken = context.NAME();
-        table.Add(new Symbol
+        foreach(var nameToken in context.NAME())
         {
-            Name = nameToken.GetText(),
-            Type = SymbolType.Parameter,
-            Scope = currentScope,
-            Line = nameToken.Symbol.Line,
-            Column = nameToken.Symbol.Column,
-            IsAssigned = true
-        });
-        if(context.param_list() != null)
-            Visit(context.param_list());
+            table.Add(new Symbol
+            {
+                Name = nameToken.GetText(),
+                Type = SymbolType.Parameter,
+                Scope = currentScope,
+                Line = nameToken.Symbol.Line,
+                Column = nameToken.Symbol.Column,
+                IsAssigned = true
+            });
+        }
         return null;
     }
 
