@@ -339,115 +339,115 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     }
 
     public override NodeCompilationResult VisitTerminatable_statement(
-    AwkParser.Terminatable_statementContext context
-)
-{
-    // return 
-    // return expr 
-    if (context.RETURN() != null)
+        AwkParser.Terminatable_statementContext context
+    )
     {
-        if (!currentScope.StartsWith("function:"))
-        {
-            throw new ArgumentException(
-                "'return' can be used only inside a function."
-            );
-        }
-
-        AwkParser.ExprContext? returnExpression =
-            context.expr_opt()?.expr();
-
         // return 
-        if (returnExpression == null)
+        // return expr 
+        if (context.RETURN() != null)
         {
-            stream.WriteLine("return awk_undefined();");
+            if (!currentScope.StartsWith("function:"))
+            {
+                throw new ArgumentException(
+                    "'return' can be used only inside a function."
+                );
+            }
+
+            AwkParser.ExprContext? returnExpression =
+                context.expr_opt()?.expr();
+
+            // return 
+            if (returnExpression == null)
+            {
+                stream.WriteLine("return awk_undefined();");
+                return new NodeCompilationResult();
+            }
+
+            // return expr
+            NodeCompilationResult expressionResult =
+                Visit(returnExpression);
+
+            string expressionName =
+                RequireReturnName(
+                    expressionResult,
+                    "return expression"
+                );
+
+            stream.WriteLine($"return {expressionName};");
+
             return new NodeCompilationResult();
         }
 
-        // return expr
-        NodeCompilationResult expressionResult =
-            Visit(returnExpression);
-
-        string expressionName =
-            RequireReturnName(
-                expressionResult,
-                "return expression"
-            );
-
-        stream.WriteLine($"return {expressionName};");
-
-        return new NodeCompilationResult();
+        return VisitChildren(context);
     }
 
-    return VisitChildren(context);
-}
-
     private List<AwkParser.ExprContext> CollectFunctionArguments(
-    AwkParser.Expr_list_optContext? context
-)
-{
-    List<AwkParser.ExprContext> arguments = new();
-
-    if (context == null || context.expr_list() == null)
+        AwkParser.Expr_list_optContext? context
+    )
     {
+        List<AwkParser.ExprContext> arguments = new();
+    
+        if (context == null || context.expr_list() == null)
+        {
+            return arguments;
+        }
+    
+        CollectExprList(context.expr_list(), arguments);
         return arguments;
     }
 
-    CollectExprList(context.expr_list(), arguments);
-    return arguments;
-}
-
-private void CollectExprList(
-    AwkParser.Expr_listContext context,
-    List<AwkParser.ExprContext> arguments
-)
-{
-    if (context.expr() != null)
+    private void CollectExprList(
+        AwkParser.Expr_listContext context,
+        List<AwkParser.ExprContext> arguments
+    )
     {
-        arguments.Add(context.expr());
-        return;
-    }
-
-    if (context.multiple_expr_list() != null)
-    {
-        CollectMultipleExprList(
-            context.multiple_expr_list(),
-            arguments
-        );
-    }
-}
-
-private void CollectMultipleExprList(
-    AwkParser.Multiple_expr_listContext context,
-    List<AwkParser.ExprContext> arguments
-)
-{
-    if (context.multiple_expr_list() != null)
-    {
-        CollectMultipleExprList(
-            context.multiple_expr_list(),
-            arguments
-        );
-
-        var expressions = context.expr();
-
-        if (expressions.Length != 1)
+        if (context.expr() != null)
         {
-            throw new InvalidOperationException(
-                "Unexpected function argument list structure."
-            );
+            arguments.Add(context.expr());
+            return;
         }
 
-        arguments.Add(expressions[0]);
-        return;
+        if (context.multiple_expr_list() != null)
+        {
+            CollectMultipleExprList(
+                context.multiple_expr_list(),
+                arguments
+            );
+        }
     }
 
-    var baseExpressions = context.expr();
-
-    foreach (var expression in baseExpressions)
+    private void CollectMultipleExprList(
+        AwkParser.Multiple_expr_listContext context,
+        List<AwkParser.ExprContext> arguments
+    )
     {
-        arguments.Add(expression);
+        if (context.multiple_expr_list() != null)
+        {
+            CollectMultipleExprList(
+                context.multiple_expr_list(),
+                arguments
+            );
+
+            var expressions = context.expr();
+
+            if (expressions.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    "Unexpected function argument list structure."
+                );
+            }
+
+            arguments.Add(expressions[0]);
+            return;
+        }
+
+        var baseExpressions = context.expr();
+
+        foreach (var expression in baseExpressions)
+        {
+            arguments.Add(expression);
+        }
     }
-}
 
     public override NodeCompilationResult VisitExpr(
         AwkParser.ExprContext context
@@ -469,54 +469,54 @@ private void CollectMultipleExprList(
             );
         }
         if (
-    context.NAME() != null &&
-    context.LPAREN() != null &&
-    context.RPAREN() != null
-)
-{
-    string functionName = context.NAME().GetText();
+            context.NAME() != null &&
+            context.LPAREN() != null &&
+            context.RPAREN() != null
+        )
+        {
+            string functionName = context.NAME().GetText();
 
-    Symbol functionSymbol =
-        symbolTable.Lookup(functionName, "global")
-        ?? throw new ArgumentException(
-            $"Function '{functionName}' is not defined."
-        );
+            Symbol functionSymbol =
+                symbolTable.Lookup(functionName, "global")
+                ?? throw new ArgumentException(
+                    $"Function '{functionName}' is not defined."
+                );
 
-    if (functionSymbol.Type != SymbolType.Function)
-    {
-        throw new ArgumentException(
-            $"Symbol '{functionName}' is not a function."
-        );
-    }
+            if (functionSymbol.Type != SymbolType.Function)
+            {
+                throw new ArgumentException(
+                    $"Symbol '{functionName}' is not a function."
+                );
+            }
 
-    string functionNameInC =
-        functionSymbol.NameInC
-        ?? throw new Exception(
-            $"Function '{functionName}' has NameInC=null."
-        );
+            string functionNameInC =
+                functionSymbol.NameInC
+                ?? throw new Exception(
+                    $"Function '{functionName}' has NameInC=null."
+                );
 
-    List<AwkParser.ExprContext> arguments =
-        CollectFunctionArguments(context.expr_list_opt());
+            List<AwkParser.ExprContext> arguments =
+                CollectFunctionArguments(context.expr_list_opt());
 
-    List<string> compiledArgumentNames = new();
+            List<string> compiledArgumentNames = new();
 
-    foreach (var argument in arguments)
-    {
-        NodeCompilationResult argumentResult =
-            Visit(argument);
+            foreach (var argument in arguments)
+            {
+                NodeCompilationResult argumentResult =
+                    Visit(argument);
 
-        compiledArgumentNames.Add(
-            RequireReturnName(argumentResult, "function argument")
-        );
-    }
+                compiledArgumentNames.Add(
+                    RequireReturnName(argumentResult, "function argument")
+                );
+            }
 
-    string joinedArguments =
-        string.Join(", ", compiledArgumentNames);
+            string joinedArguments =
+                string.Join(", ", compiledArgumentNames);
 
-    return EmitTemporary(
-        $"{functionNameInC}({joinedArguments})"
-    );
-}
+            return EmitTemporary(
+                $"{functionNameInC}({joinedArguments})"
+            );
+        }
 
         AwkParser.ExprContext[] nestedExpressions = context.expr();
 
