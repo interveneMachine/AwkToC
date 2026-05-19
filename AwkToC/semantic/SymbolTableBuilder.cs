@@ -69,7 +69,7 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             {
                 Name = context.NAME().GetText(),
                 Type = isArray ? SymbolType.Array : SymbolType.Variable,
-                Scope = currentScope,
+                Scope = "global",
                 Line = context.Start.Line,
                 Column = context.Start.Column,
                 IsArray = isArray,
@@ -77,37 +77,6 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             });
         }
 
-        if (context.DOLLAR() != null)
-        {
-            table.Add(new Symbol
-            {
-                Name = context.GetText(),
-                Type = SymbolType.Field,
-                Scope = currentScope,
-                Line = context.Start.Line,
-                Column = context.Start.Column,
-                IsUsed = true
-            });
-        }
-
         return base.VisitLvalue(context);
-    }
-
-    public override object? VisitExpr(AwkParser.ExprContext context)
-    {
-        if (context.NAME() != null && context.LPAREN() != null)
-        {
-            table.Add(new Symbol
-            {
-                Name = context.NAME().GetText(),
-                Type = SymbolType.Function,
-                Scope = "global",
-                Line = context.Start.Line,
-                Column = context.Start.Column,
-                IsUsed = true
-            });
-        }
-
-        return base.VisitExpr(context);
     }
 }

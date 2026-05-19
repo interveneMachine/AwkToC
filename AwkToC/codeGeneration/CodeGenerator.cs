@@ -10,9 +10,6 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     private readonly CWriter stream;
 
     private string currentScope = "global";
-    private int temporaryCounter = 0;
-    private int patternCounter = 0;
-    private int itemCounter = 0;
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
@@ -20,24 +17,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream = new CWriter(streamWriter);
     }
 
-    private string NewTemporaryName()
-    {
-        return $"tmp{temporaryCounter++}";
-    }
-
-    private string NewPatternName()
-    {
-        return $"pattern{patternCounter++}";
-    }
-
-    private string NewItemName()
-    {
-        return $"item{itemCounter++}";
-    }
-
     private NodeCompilationResult EmitTemporary(string cExpression)
     {
-        string temporaryName = NewTemporaryName();
+        string temporaryName = symbolTable.NewTemporaryCName();
 
         stream.WriteLine($"AwkValue {temporaryName} = {cExpression};");
 
@@ -47,7 +29,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         );
     }
 
-    private string RequireReturnName(
+    private static string RequireReturnName(
         NodeCompilationResult result,
         string operationName
     )
@@ -123,7 +105,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         // pattern action
         if (context.pattern() is not null)
         {
-            string itemName = NewItemName();
+            string itemName = symbolTable.NewItemCName();
             string patternName = "";
             bool isSpecial = context.pattern().BEGIN() is not null
                           || context.pattern().END() is not null;
@@ -191,7 +173,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         // action
         if (context.action() is not null)
         {
-            string itemNameAction = NewItemName();
+            string itemNameAction = symbolTable.NewItemCName();
             stream.WriteLine($"void {itemNameAction}()");
             stream.EnterBlock();
 
@@ -205,7 +187,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
         
         // simple_pattern
-        string itemNameSimplePattern = NewItemName();
+        string itemNameSimplePattern = symbolTable.NewItemCName();
         NodeCompilationResult simplePatternResult = Visit(context.pattern());
         string simplePatternName = RequireReturnName(simplePatternResult, "item -> simple_pattern");
         
@@ -227,7 +209,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     public override NodeCompilationResult VisitPattern([NotNull] AwkParser.PatternContext context)
     {
-        string patternName = NewPatternName();
+        string patternName = symbolTable.NewPatternCName();
         stream.WriteLine($"int {patternName}()");
         stream.EnterBlock();
         
@@ -317,7 +299,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
 
-        string valuesArrayName = NewTemporaryName();
+        string valuesArrayName = symbolTable.NewTemporaryCName();
 
         stream.WriteLine(
             $"AwkValue {valuesArrayName}[] = {{ {string.Join(", ", compiledExpressionNames)} }};"

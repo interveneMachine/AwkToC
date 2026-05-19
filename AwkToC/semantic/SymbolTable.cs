@@ -4,6 +4,9 @@ public class SymbolTable
 {
     private HashSet<string> UsedCNames = new();
     private readonly Dictionary<string, Symbol> symbols = new();
+    private int temporaryCounter = 0;
+    private int patternCounter = 0;
+    private int itemCounter = 0;
     public void Add(Symbol symbol)
     {
         string key = $"{symbol.Scope}:{symbol.Name}";
@@ -32,11 +35,31 @@ public class SymbolTable
 
     public string AddCName(string name)
     {
-        int suffix = 0;
-        while(UsedCNames.Contains(name + suffix))
-            suffix++;
-        UsedCNames.Add(name + suffix);
-        return name + suffix;
+        if (UsedCNames.Contains(name))
+        {
+            int suffix = 0;
+            while (UsedCNames.Contains(name + suffix))
+                suffix++;
+            UsedCNames.Add(name + suffix);
+            return name + suffix;
+        }
+        UsedCNames.Add(name);
+        return name;
+    }
+
+    public string NewTemporaryCName()
+    {
+        return AddCName($"tmp{temporaryCounter++}");
+    }
+
+    public string NewPatternCName()
+    {
+        return AddCName($"pattern{patternCounter++}");
+    }
+
+    public string NewItemCName()
+    {
+        return AddCName($"item{itemCounter++}");
     }
 
     public IEnumerable<Symbol> All()
