@@ -50,7 +50,10 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesInScope(currentCScope))
         {
             if (tmpSymbol.IsMemoryAllocated)
+            {
                 stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
+                tmpSymbol.IsMemoryAllocated = false;
+            }
         }
     }
 
@@ -270,11 +273,13 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         else
         {
             NodeCompilationResult exprResult = Visit(context.expr()[0]);
-            string exprName = RequireReturnName(exprResult, "pattern -> expr");
-            stream.WriteLine($"return awk_is_truthy({exprName});");
+            string returnValueCName = symbolTable.AddCName("returnValue");
+            string exprName = RequireReturnName(exprResult, "expr");
+            stream.WriteLine($"int {returnValueCName} = awk_is_truthy({exprName});");
+            FreeTmpVariables();
+            stream.WriteLine($"return {returnValueCName};");
         }
 
-        FreeTmpVariables();
         currentCScope = previousCScope;
         stream.ExitBlock();
         return new NodeCompilationResult(
@@ -382,12 +387,11 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             AwkParser.ExprContext? returnExpression =
                 context.expr_opt()?.expr();
-            
-            FreeTmpVariables();
 
             // return 
             if (returnExpression == null)
             {
+                FreeTmpVariables();
                 stream.WriteLine("return awk_undefined();");
                 return new NodeCompilationResult();
             }
@@ -395,14 +399,26 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             // return expr
             NodeCompilationResult expressionResult =
                 Visit(returnExpression);
-
+            
             string expressionName =
                 RequireReturnName(
                     expressionResult,
                     "return expression"
                 );
+            NodeCompilationResult returnResult =
+                EmitTemporary(
+                    $"awk_copy({expressionName})",
+                    false
+                );
+            string returnName =
+                RequireReturnName(
+                    returnResult,
+                    "return expression"
+                );
+            
+            FreeTmpVariables();
 
-            stream.WriteLine($"return {expressionName};");
+            stream.WriteLine($"return {returnName};");
 
             return new NodeCompilationResult();
         }
@@ -496,7 +512,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             return EmitTemporary(
                 $"awk_string({context.STRING().GetText()})",
-                false
+                true
             );
         }
         if (
@@ -546,7 +562,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             return EmitTemporary(
                 $"{functionNameInC}({joinedArguments})",
-                false
+                true
             );
         }
 
@@ -561,8 +577,16 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string ere = context.ERE().GetText();
             ere = ere.Trim('/').Replace("\\/", "/");
 
+            NodeCompilationResult result =
+                EmitTemporary(
+                    $"fields_get(fields, 0)",
+                    true
+                );
+            string resultName = 
+                RequireReturnName(result, "ere");
+
             return EmitTemporary(
-                $"awk_match(fields_get(fields, 0), \"{ere}\")",
+                $"awk_match({resultName}, \"{ere}\")",
                 false
             );
         }
@@ -580,15 +604,24 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             // lvalue
             if (context.ChildCount == 1)
                 return EmitTemporary(
-                    $"{lvalueName}",
-                    false
+                    $"awk_copy({lvalueName})",
+                    true
                 );
+            
+            NodeCompilationResult result = EmitTemporary(
+                $"awk_copy({lvalueName})",
+                true
+            );
+            string resultName =
+                RequireReturnName(result, "lvalue");
+            
+            stream.WriteLine($"awk_free(&{lvalueName});");
 
             // INCR lvalue
             if (context.GetChild(0).GetText() == "++")
             {
                 return EmitTemporary(
-                    $"({lvalueName} = awk_add({lvalueName}, awk_number(1)))",
+                    $"({lvalueName} = awk_add({resultName}, awk_number(1)))",
                     false
                 );
             }
@@ -597,7 +630,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             else if (context.GetChild(0).GetText() == "--")
             {
                 return EmitTemporary(
-                    $"({lvalueName} = awk_sub({lvalueName}, awk_number(1)))",
+                    $"({lvalueName} = awk_sub({resultName}, awk_number(1)))",
                     false
                 );
             }
@@ -605,12 +638,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             // lvalue INCR
             else if (context.GetChild(1).GetText() == "++")
             {
-                NodeCompilationResult result = EmitTemporary(
-                    $"awk_copy({lvalueName})",
-                    true
-                );
                 stream.WriteLine(
-                    $"{lvalueName} = awk_add({lvalueName}, awk_number(1));"
+                    $"{lvalueName} = awk_add({resultName}, awk_number(1));"
                 );
                 return result;
             }
@@ -618,12 +647,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             // lvalue DECR
             else if (context.GetChild(1).GetText() == "--")
             {
-                NodeCompilationResult result = EmitTemporary(
-                    $"awk_copy({lvalueName})",
-                    true
-                );
                 stream.WriteLine(
-                    $"{lvalueName} = awk_sub({lvalueName}, awk_number(1));"
+                    $"{lvalueName} = awk_sub({resultName}, awk_number(1));"
                 );
                 return result;
             }
@@ -749,10 +774,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
                 string valueName =
                     RequireReturnName(value, "assign(expr)");
+                
+                stream.WriteLine($"awk_free(&{lvalueName});");
 
                 return EmitTemporary(
-                    $"({lvalueName} = {valueName})",
-                    false
+                    $"awk_copy({lvalueName} = awk_copy({valueName}))",
+                    true
                 );
             }
 
@@ -780,8 +807,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 else throw new Exception("unable to match expr rule");
 
                 return EmitTemporary(
-                    $"({lvalueName} = {operationSymbol}({lvalueName}, {valueName}))",
-                    false
+                    $"awk_copy({lvalueName} = {operationSymbol}({lvalueName}, {valueName}))",
+                    true
                 );
             }
 

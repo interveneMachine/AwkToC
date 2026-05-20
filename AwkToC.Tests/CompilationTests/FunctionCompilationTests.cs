@@ -80,6 +80,22 @@ public class FunctionCompilationTests
             File.ReadAllText(generatedResults)
         );
 
+        var runWithValgrind = Process.Start(new ProcessStartInfo
+        {
+            FileName = "/bin/bash",
+            Arguments = $"valgrind --leak-check=full --error-exitcode=1 ./{compiled} {data}",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        }) ?? throw new InvalidOperationException("Failed to start valgrind process");
+        runWithValgrind.WaitForExit();
+
+        Assert.True(runWithValgrind.ExitCode == 0, 
+            $"valgrind memcheck detected errors/leaks\n" +
+            $"command: valgrind --leak-check=full --error-exitcode=1 ./main data.txt\n" +
+            $"in {dir}"
+        );
+
         File.Delete(cFile);
         File.Delete(compiled);
         File.Delete(generatedResults);

@@ -223,6 +223,11 @@ void fields_free(Fields* value)
 {
     if(value == NULL || value->data == NULL)
         return;
+    for(int i = 0; i < value->size; i++)
+    {
+        if(value->data[i] != NULL)
+            free(value->data[i]);
+    }
     free(value->data);
     value->size = 0;
     value->data = NULL;
@@ -272,11 +277,15 @@ AwkValue awk_copy(AwkValue value)
 
 AwkValue awk_match(AwkValue value, const char* regex_cstring)
 {
+    int toFree = 0;
     char* s;
     if (value.type == AWK_STRING)
         s = value.string;
     else if (value.type == AWK_NUMBER)
+    {
         s = awk_to_string(value);
+        toFree = 1;
+    }
     else
         s = "";
     
@@ -285,11 +294,14 @@ AwkValue awk_match(AwkValue value, const char* regex_cstring)
     int result = regcomp(&regex, regex_cstring, REG_EXTENDED);
     if (result != 0)
     {
+        if(toFree) free(s);
         fprintf(stderr, "Failed to compile regex\n");
         exit(1);
     }
     size_t n_match = 1;
     int is_match = regexec(&regex, s, n_match, pmatch, 0);
+    if(toFree) free(s);
+    regfree(&regex);
     if (is_match)
         return awk_bool(0);
     return awk_bool(1);

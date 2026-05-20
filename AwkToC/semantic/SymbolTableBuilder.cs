@@ -65,6 +65,9 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
         if (context.NAME() != null)
         {
             bool isArray = context.LBRACKET() != null;
+            var s = table.Lookup(context.NAME().GetText(), currentScope);
+            if (s != null)
+                return base.VisitLvalue(context);
             table.Add(new Symbol
             {
                 Name = context.NAME().GetText(),

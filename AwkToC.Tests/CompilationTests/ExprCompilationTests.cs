@@ -45,6 +45,7 @@ public class ExprCompilationTests
             new StreamWriter(cFile)
         );
 
+        string stdOut, stdErr;
         var compile = Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/gcc",
@@ -56,8 +57,8 @@ public class ExprCompilationTests
         compile.WaitForExit();
         if (compile.ExitCode != 0)
         {
-            string stdOut = compile.StandardOutput.ReadToEnd();
-            string stdErr = compile.StandardError.ReadToEnd();
+            stdOut = compile.StandardOutput.ReadToEnd();
+            stdErr = compile.StandardError.ReadToEnd();
             throw new InvalidOperationException(
                 $"GCC compilation failed with exit code {compile.ExitCode}\n" +
                 $"Command: /bin/gcc {cFile} -o {compiled}\n" +
@@ -77,8 +78,8 @@ public class ExprCompilationTests
         run.WaitForExit();
         if (run.ExitCode != 0)
         {
-            string stdOut = run.StandardOutput.ReadToEnd();
-            string stdErr = run.StandardError.ReadToEnd();
+            stdOut = run.StandardOutput.ReadToEnd();
+            stdErr = run.StandardError.ReadToEnd();
             throw new InvalidOperationException(
                 $"running compiled program failed with exit code {run.ExitCode}\n" +
                 $"Command: /bin/bash -c \"./{compiled} {data} > {generatedResults}\"\n" +
@@ -90,6 +91,22 @@ public class ExprCompilationTests
         Assert.Equal(
             File.ReadAllText(correctResults),
             File.ReadAllText(generatedResults)
+        );
+
+        var runWithValgrind = Process.Start(new ProcessStartInfo
+        {
+            FileName = "/bin/bash",
+            Arguments = $"valgrind --leak-check=full --error-exitcode=1 ./{compiled} {data}",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        }) ?? throw new InvalidOperationException("Failed to start valgrind process");
+        runWithValgrind.WaitForExit();
+
+        Assert.True(runWithValgrind.ExitCode == 0, 
+            $"valgrind memcheck detected errors/leaks\n" +
+            $"command: valgrind --leak-check=full --error-exitcode=1 ./main data.txt\n" +
+            $"in {dir}"
         );
 
         File.Delete(cFile);
