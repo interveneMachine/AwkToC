@@ -10,6 +10,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     private readonly CWriter stream;
 
     private string currentScope = "global";
+    private string currentCScope = "global";
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
@@ -17,9 +18,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream = new CWriter(streamWriter);
     }
 
-    private NodeCompilationResult EmitTemporary(string cExpression)
+    private NodeCompilationResult EmitTemporary(string cExpression, bool isMemoryAllocated)
     {
-        string temporaryName = symbolTable.NewTemporaryCName();
+        string temporaryName = symbolTable.NewTemporaryCName(currentCScope, isMemoryAllocated);
 
         stream.WriteLine($"AwkValue {temporaryName} = {cExpression};");
 
@@ -42,6 +43,15 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
         return result.ReturnName;
+    }
+
+    private void FreeTmpVariables()
+    {
+        foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesInScope(currentCScope))
+        {
+            if (tmpSymbol.IsMemoryAllocated)
+                stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
+        }
     }
 
     public override NodeCompilationResult VisitProgram(
@@ -119,6 +129,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine($"void {itemName}()");
             stream.EnterBlock();
 
+            string previousCScope = currentCScope;
+            currentCScope = $"item:{itemName}";
+
             if (!isSpecial)
             {
                 stream.WriteLine($"if({patternName}())");
@@ -127,7 +140,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             Visit(context.action());
 
+            FreeTmpVariables();
             if (!isSpecial) stream.ExitBlock();
+            currentCScope = previousCScope;
             stream.ExitBlock();
 
             return new NodeCompilationResult(
@@ -146,6 +161,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 ?? throw new Exception($"function {name} in {currentScope} has NameInC=null");
             string previousScope = currentScope;
             currentScope = $"function:{name}";
+            string previousCScope = currentCScope;
+            currentCScope = $"function:{functionName}";
 
             List<string> parameters = new();
             if (context.param_list_opt() != null &&
@@ -163,7 +180,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.EnterBlock();
 
             Visit(context.action());
+            FreeTmpVariables();
             stream.WriteLine("return awk_undefined();");
+            currentCScope = previousCScope;
             stream.ExitBlock();
             currentScope = previousScope;
             
@@ -176,9 +195,13 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string itemNameAction = symbolTable.NewItemCName();
             stream.WriteLine($"void {itemNameAction}()");
             stream.EnterBlock();
+            string previousCScope = currentCScope;
+            currentCScope = $"item:{itemNameAction}";
 
             Visit(context.action());
 
+            FreeTmpVariables();
+            currentCScope = previousCScope; 
             stream.ExitBlock();
             return new NodeCompilationResult(
                 itemNameAction,
@@ -187,24 +210,32 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
         
         // simple_pattern
-        string itemNameSimplePattern = symbolTable.NewItemCName();
-        NodeCompilationResult simplePatternResult = Visit(context.simple_pattern());
-        string simplePatternName = RequireReturnName(simplePatternResult, "item -> simple_pattern");
-        
-        stream.WriteLine($"void {itemNameSimplePattern}()");
-        stream.EnterBlock();
+        if(context.simple_pattern() is not null)
+        {
+            string itemNameSimplePattern = symbolTable.NewItemCName();
+            NodeCompilationResult simplePatternResult = Visit(context.simple_pattern());
+            string simplePatternName = RequireReturnName(simplePatternResult, "item -> simple_pattern");
 
-        stream.WriteLine($"if({simplePatternName}())");
-        stream.EnterBlock();
+            stream.WriteLine($"void {itemNameSimplePattern}()");
+            stream.EnterBlock();
+            string previousCScope = currentCScope;
+            currentCScope = $"item:{itemNameSimplePattern}";
 
-        stream.WriteLine("awk_print_value(fields_get(fields, 0));");
+            stream.WriteLine($"if({simplePatternName}())");
+            stream.EnterBlock();
 
-        stream.ExitBlock();
-        stream.ExitBlock();
-        return new NodeCompilationResult(
-            itemNameSimplePattern,
-            CType.ItemFunction
-        );
+            stream.WriteLine("awk_print_value(fields_get(fields, 0));");
+
+            stream.ExitBlock();
+            FreeTmpVariables();
+            currentCScope = previousCScope;
+            stream.ExitBlock();
+                return new NodeCompilationResult(
+                itemNameSimplePattern,
+                CType.ItemFunction
+            );
+        }
+        throw new Exception("unrecognised item rule");
     }
 
     public override NodeCompilationResult VisitPattern([NotNull] AwkParser.PatternContext context)
@@ -212,6 +243,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         string patternName = symbolTable.NewPatternCName();
         stream.WriteLine($"int {patternName}()");
         stream.EnterBlock();
+        string previousCScope = currentCScope;
+        currentCScope = $"pattern:{patternName}";
         
         // BEGIN
         if (context.BEGIN() is not null)
@@ -241,6 +274,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine($"return awk_is_truthy({exprName});");
         }
 
+        FreeTmpVariables();
+        currentCScope = previousCScope;
         stream.ExitBlock();
         return new NodeCompilationResult(
             patternName,
@@ -299,7 +334,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
 
-        string valuesArrayName = symbolTable.NewTemporaryCName();
+        string valuesArrayName = symbolTable.NewTemporaryCName(currentCScope, true);
 
         stream.WriteLine(
             $"AwkValue {valuesArrayName}[] = {{ {string.Join(", ", compiledExpressionNames)} }};"
@@ -347,6 +382,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             AwkParser.ExprContext? returnExpression =
                 context.expr_opt()?.expr();
+            
+            FreeTmpVariables();
 
             // return 
             if (returnExpression == null)
@@ -449,7 +486,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (context.NUMBER() != null)
         {
             return EmitTemporary(
-                $"awk_number({context.NUMBER().GetText()})"
+                $"awk_number({context.NUMBER().GetText()})",
+                false
             );
         }
 
@@ -457,7 +495,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (context.STRING() != null)
         {
             return EmitTemporary(
-                $"awk_string({context.STRING().GetText()})"
+                $"awk_string({context.STRING().GetText()})",
+                false
             );
         }
         if (
@@ -506,7 +545,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 string.Join(", ", compiledArgumentNames);
 
             return EmitTemporary(
-                $"{functionNameInC}({joinedArguments})"
+                $"{functionNameInC}({joinedArguments})",
+                false
             );
         }
 
@@ -522,7 +562,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             ere = ere.Trim('/').Replace("\\/", "/");
 
             return EmitTemporary(
-                $"awk_match(fields_get(fields, 0), \"{ere}\")"
+                $"awk_match(fields_get(fields, 0), \"{ere}\")",
+                false
             );
         }
 
@@ -539,14 +580,16 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             // lvalue
             if (context.ChildCount == 1)
                 return EmitTemporary(
-                    $"{lvalueName}"
+                    $"{lvalueName}",
+                    false
                 );
 
             // INCR lvalue
             if (context.GetChild(0).GetText() == "++")
             {
                 return EmitTemporary(
-                    $"({lvalueName} = awk_add({lvalueName}, awk_number(1)))"
+                    $"({lvalueName} = awk_add({lvalueName}, awk_number(1)))",
+                    false
                 );
             }
 
@@ -554,7 +597,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             else if (context.GetChild(0).GetText() == "--")
             {
                 return EmitTemporary(
-                    $"({lvalueName} = awk_sub({lvalueName}, awk_number(1)))"
+                    $"({lvalueName} = awk_sub({lvalueName}, awk_number(1)))",
+                    false
                 );
             }
 
@@ -562,7 +606,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             else if (context.GetChild(1).GetText() == "++")
             {
                 NodeCompilationResult result = EmitTemporary(
-                    $"awk_copy({lvalueName})"
+                    $"awk_copy({lvalueName})",
+                    true
                 );
                 stream.WriteLine(
                     $"{lvalueName} = awk_add({lvalueName}, awk_number(1));"
@@ -574,7 +619,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             else if (context.GetChild(1).GetText() == "--")
             {
                 NodeCompilationResult result = EmitTemporary(
-                    $"awk_copy({lvalueName})"
+                    $"awk_copy({lvalueName})",
+                    true
                 );
                 stream.WriteLine(
                     $"{lvalueName} = awk_sub({lvalueName}, awk_number(1));"
@@ -605,7 +651,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 RequireReturnName(value, "field operator");
             
             return EmitTemporary(
-                $"fields_get(fields, awk_to_int({valueName}))"
+                $"fields_get(fields, awk_to_int({valueName}))",
+                true
             );
         }
 
@@ -621,7 +668,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 RequireReturnName(value, "logical NOT");
 
             return EmitTemporary(
-                $"awk_not({valueName})"
+                $"awk_not({valueName})",
+                false
             );
         }
         
@@ -637,7 +685,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 RequireReturnName(value, "unary plus");
 
             return EmitTemporary(
-                $"awk_unary_plus({valueName})"
+                $"awk_unary_plus({valueName})",
+                false
             );
         }
 
@@ -653,7 +702,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 RequireReturnName(value, "unary minus");
 
             return EmitTemporary(
-                $"awk_unary_minus({valueName})"
+                $"awk_unary_minus({valueName})",
+                false
             );
         }
         if (nestedExpressions.Length == 1)
@@ -668,7 +718,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                     RequireReturnName(value, "expr");
                 
                 return EmitTemporary(
-                    $"awk_add({valueName}, awk_number(1))"
+                    $"awk_add({valueName}, awk_number(1))",
+                    false
                 );
             }
             // DECR expr / expr DECR
@@ -681,7 +732,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                     RequireReturnName(value, "expr");
                 
                 return EmitTemporary(
-                    $"awk_sub({valueName}, awk_number(1))"
+                    $"awk_sub({valueName}, awk_number(1))",
+                    false
                 );
             }
             if (context.ASSIGN() != null)
@@ -699,7 +751,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                     RequireReturnName(value, "assign(expr)");
 
                 return EmitTemporary(
-                    $"({lvalueName} = {valueName})"
+                    $"({lvalueName} = {valueName})",
+                    false
                 );
             }
 
@@ -727,7 +780,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 else throw new Exception("unable to match expr rule");
 
                 return EmitTemporary(
-                    $"({lvalueName} = {operationSymbol}({lvalueName}, {valueName}))"
+                    $"({lvalueName} = {operationSymbol}({lvalueName}, {valueName}))",
+                    false
                 );
             }
 
@@ -742,7 +796,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 string ere = context.ERE().GetText();
                 ere = ere.Trim('/').Replace("\\/", "/");
                 return EmitTemporary(
-                    $"awk_match({valueName}, \"{ere}\")"
+                    $"awk_match({valueName}, \"{ere}\")",
+                    false
                 );
             }
 
@@ -757,7 +812,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 string ere = context.ERE().GetText();
                 ere = ere.Trim('/').Replace("\\/", "/");
                 return EmitTemporary(
-                    $"awk_not(awk_match({valueName}, \"{ere}\"))"
+                    $"awk_not(awk_match({valueName}, \"{ere}\"))",
+                    false
                 );
             }
         }
@@ -778,78 +834,93 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 
             if (context.PLUS() != null)
                 return EmitTemporary(
-                    $"awk_add({leftName}, {rightName})"
+                    $"awk_add({leftName}, {rightName})",
+                    false
                 );
 
             if (context.MINUS() != null)
                 return EmitTemporary(
-                    $"awk_sub({leftName}, {rightName})"
+                    $"awk_sub({leftName}, {rightName})",
+                    false
                 );
 
             if (context.MUL() != null)
                 return EmitTemporary(
-                    $"awk_mul({leftName}, {rightName})"
+                    $"awk_mul({leftName}, {rightName})",
+                    false
                 );
 
             if (context.DIV() != null)
                 return EmitTemporary(
-                    $"awk_div({leftName}, {rightName})"
+                    $"awk_div({leftName}, {rightName})",
+                    false
                 );
 
             if (context.MOD() != null)
                 return EmitTemporary(
-                    $"awk_mod({leftName}, {rightName})"
+                    $"awk_mod({leftName}, {rightName})",
+                    false
                 );
 
             if (context.POW() != null)
                 return EmitTemporary(
-                    $"awk_pow({leftName}, {rightName})"
+                    $"awk_pow({leftName}, {rightName})",
+                    false
                 );
 
             if (context.EQ() != null)
                 return EmitTemporary(
-                    $"awk_eq({leftName}, {rightName})"
+                    $"awk_eq({leftName}, {rightName})",
+                    false
                 );
 
             if (context.NE() != null)
                 return EmitTemporary(
-                    $"awk_ne({leftName}, {rightName})"
+                    $"awk_ne({leftName}, {rightName})",
+                    false
                 );
 
             if (context.LT() != null)
                 return EmitTemporary(
-                    $"awk_lt({leftName}, {rightName})"
+                    $"awk_lt({leftName}, {rightName})",
+                    false
                 );
 
             if (context.LE() != null)
                 return EmitTemporary(
-                    $"awk_le({leftName}, {rightName})"
+                    $"awk_le({leftName}, {rightName})",
+                    false
                 );
 
             if (context.GT() != null)
                 return EmitTemporary(
-                    $"awk_gt({leftName}, {rightName})"
+                    $"awk_gt({leftName}, {rightName})",
+                    false
                 );
 
             if (context.GE() != null)
                 return EmitTemporary(
-                    $"awk_ge({leftName}, {rightName})"
+                    $"awk_ge({leftName}, {rightName})",
+                    false
                 );
 
     
             if (context.AND() != null)
                 return EmitTemporary(
-                    $"awk_number(awk_is_truthy({leftName}) && awk_is_truthy({rightName}))"
+                    $"awk_number(awk_is_truthy({leftName}) && awk_is_truthy({rightName}))",
+                    false
                 );
 
             if (context.OR() != null)
                 return EmitTemporary(
-                    $"awk_number(awk_is_truthy({leftName}) || awk_is_truthy({rightName}))"
+                    $"awk_number(awk_is_truthy({leftName}) || awk_is_truthy({rightName}))",
+                    false
                 );
 
   
             return EmitTemporary(
-                $"awk_concat({leftName}, {rightName})"
+                $"awk_concat({leftName}, {rightName})",
+                true
             );
         }
 
