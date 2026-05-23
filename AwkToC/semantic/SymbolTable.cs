@@ -1,3 +1,5 @@
+using System.Transactions;
+
 namespace AwkToC.Semantic;
 
 public class SymbolTable
@@ -18,10 +20,10 @@ public class SymbolTable
         }
     }
 
-    public Symbol? Lookup(string name, string scope)
+    public Symbol? Lookup(string name, AwkScope awkScope)
     {
-        string localKey = $"{scope}:{name}";
-        string globalKey = $"global:{name}";
+        string localKey = $"{awkScope.GetScope()}:{name}";
+        string globalKey = $"{awkScope.GetGlobal()}:{name}";
         if (symbols.TryGetValue(localKey, out var local))
         {
             return local;
@@ -48,15 +50,16 @@ public class SymbolTable
         return name;
     }
 
-    public string NewTemporaryCName(string scope, bool isMemoryAllocated)
+    public string NewTemporaryCName(CScope cScope, bool isMemoryAllocated)
     {
+        string currentScope = cScope.GetScope();
         string name = AddCName($"tmp{temporaryCounter++}");
-        if (!TmpSymbols.ContainsKey(scope))
-            TmpSymbols[scope] = new List<CSymbol>();
-        TmpSymbols[scope].Add(new CSymbol
+        if (!TmpSymbols.ContainsKey(currentScope))
+            TmpSymbols[currentScope] = [];
+        TmpSymbols[currentScope].Add(new CSymbol
         {
             Name = name,
-            Scope = scope,
+            Scope = currentScope,
             IsMemoryAllocated = isMemoryAllocated
         });
         return name;
@@ -72,19 +75,14 @@ public class SymbolTable
         return AddCName($"item{itemCounter++}");
     }
 
-    public IEnumerable<Symbol> All()
+    public IEnumerable<Symbol> AllVariables()
     {
-        return symbols.Values;
+        return symbols.Values.Where(s => s.Type == SymbolType.Variable);
     }
 
-    public IEnumerable<Symbol> AllInScope(string scope)
+    public List<CSymbol> AllTmpVariablesInScope(CScope cScope)
     {
-        return (IEnumerable<Symbol>)symbols.Values.Where(sym => sym.Scope == scope).GetEnumerator();
-    }
-
-    public List<CSymbol> AllTmpVariablesInScope(string scope)
-    {
-        if (TmpSymbols.TryGetValue(scope, out List<CSymbol>? value))
+        if (TmpSymbols.TryGetValue(cScope.GetScope(), out List<CSymbol>? value))
             return value;
         return [];
     }

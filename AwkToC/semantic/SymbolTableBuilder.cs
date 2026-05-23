@@ -1,12 +1,11 @@
 using Antlr4.Runtime.Misc;
-using Antlr4.Runtime.Tree;
 
 namespace AwkToC.Semantic;
 
 public class SymbolTableBuilder : AwkBaseVisitor<object?>
 {
     private readonly SymbolTable table = new();
-    private string currentScope = "global";
+    private readonly AwkScope awkScope = new();
     public SymbolTable Build(AwkParser.ProgramContext context)
     {
         Visit(context);
@@ -27,8 +26,7 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
                 Column = context.Start.Column
             });
 
-            string previousScope = currentScope;
-            currentScope = $"function:{functionName}";
+            awkScope.EnterFunction(functionName);
             
             var paramList = context.param_list_opt()?.param_list();
             if (paramList != null)
@@ -37,7 +35,7 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             }
 
             Visit(context.action());
-            currentScope = previousScope;
+            awkScope.ExitFunction();
             return null;
         }
 
@@ -51,10 +49,9 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             {
                 Name = nameToken.GetText(),
                 Type = SymbolType.Parameter,
-                Scope = currentScope,
+                Scope = awkScope.GetScope(),
                 Line = nameToken.Symbol.Line,
                 Column = nameToken.Symbol.Column,
-                IsAssigned = true
             });
         }
         return null;
@@ -64,22 +61,28 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
     {
         if (context.NAME() != null)
         {
+            string name = context.NAME().GetText();
             bool isArray = context.LBRACKET() != null;
-            var s = table.Lookup(context.NAME().GetText(), currentScope);
+            var s = table.Lookup(name, awkScope);
             if (s != null)
-                return base.VisitLvalue(context);
+            {
+                if (s.IsArray != isArray)
+                    throw new Exception(s.IsArray
+                        ? $"[line {context.Start.Line}] attempt to use array `{name}` in a scalar context"
+                        : $"[line {context.Start.Line}] attempt to use scalar `{name}` in an array context");
+                return null;
+            }
             table.Add(new Symbol
             {
-                Name = context.NAME().GetText(),
-                Type = isArray ? SymbolType.Array : SymbolType.Variable,
-                Scope = "global",
+                Name = name,
+                Type = SymbolType.Variable,
+                Scope = awkScope.GetGlobal(),
                 Line = context.Start.Line,
                 Column = context.Start.Column,
-                IsArray = isArray,
-                IsUsed = true
+                IsArray = isArray
             });
         }
 
-        return base.VisitLvalue(context);
+        return null;
     }
 }

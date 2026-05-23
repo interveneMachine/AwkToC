@@ -9,8 +9,8 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     private readonly SymbolTable symbolTable;
     private readonly CWriter stream;
 
-    private string currentScope = "global";
-    private string currentCScope = "global";
+    private AwkScope awkScope = new();
+    private CScope cScope = new();
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
@@ -20,7 +20,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     private NodeCompilationResult EmitTemporary(string cExpression, bool isMemoryAllocated)
     {
-        string temporaryName = symbolTable.NewTemporaryCName(currentCScope, isMemoryAllocated);
+        string temporaryName = symbolTable.NewTemporaryCName(cScope, isMemoryAllocated);
 
         stream.WriteLine($"AwkValue {temporaryName} = {cExpression};");
 
@@ -47,7 +47,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     private void FreeTmpVariables()
     {
-        foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesInScope(currentCScope))
+        foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesInScope(cScope))
         {
             if (tmpSymbol.IsMemoryAllocated)
             {
@@ -67,8 +67,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         stream.WriteLine("Fields fields;");
 
-        symbolTable.All()
-                   .Where(s => s.Type == SymbolType.Variable)
+        symbolTable.AllVariables()
                    .Select(s => s.NameInC
                         ?? throw new Exception($"variable {s.Name} in global has NameInC=null"))
                    .ToList()
@@ -132,8 +131,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine($"void {itemName}()");
             stream.EnterBlock();
 
-            string previousCScope = currentCScope;
-            currentCScope = $"item:{itemName}";
+            cScope.EnterFunction(itemName);
 
             if (!isSpecial)
             {
@@ -145,7 +143,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             FreeTmpVariables();
             if (!isSpecial) stream.ExitBlock();
-            currentCScope = previousCScope;
+            cScope.ExitFunction();
             stream.ExitBlock();
 
             return new NodeCompilationResult(
@@ -158,24 +156,22 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (context.FUNCTION() is not null)
         {
             string name = context.NAME().GetText();
-            Symbol function = symbolTable.Lookup(name, currentScope)
-                ?? throw new ArgumentException($"function {name} in {currentScope} is missing from symbolTable");
+            Symbol function = symbolTable.Lookup(name, awkScope)
+                ?? throw new ArgumentException($"function {name} is missing from symbolTable");
             string functionName = function.NameInC
-                ?? throw new Exception($"function {name} in {currentScope} has NameInC=null");
-            string previousScope = currentScope;
-            currentScope = $"function:{name}";
-            string previousCScope = currentCScope;
-            currentCScope = $"function:{functionName}";
+                ?? throw new Exception($"function {name} has NameInC=null");
+            awkScope.EnterFunction(name);
+            cScope.EnterFunction(name);
 
             List<string> parameters = new();
             if (context.param_list_opt() != null &&
                 context.param_list_opt().param_list() != null)
                 foreach(var parameter in context.param_list_opt().param_list().NAME())
                 {
-                    Symbol parameterSymbol = symbolTable.Lookup(parameter.GetText(), currentScope)
-                        ?? throw new Exception($"symbolTable is missing symbol for {parameter.GetText()} in {currentScope}");
+                    Symbol parameterSymbol = symbolTable.Lookup(parameter.GetText(), awkScope)
+                        ?? throw new Exception($"symbolTable is missing symbol for {parameter.GetText()} in {awkScope.GetScope()}");
                     if(parameterSymbol.NameInC == null)
-                        throw new Exception($"symbol with name: {parameterSymbol.Name} scope: {currentScope} is missing NameInC");
+                        throw new Exception($"symbol with name: {parameterSymbol.Name} scope: {awkScope.GetScope()} is missing NameInC");
                     parameters.Add($"AwkValue {parameterSymbol.NameInC}");
                 }
             string parameterNames = string.Join(", ", parameters);
@@ -185,9 +181,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             Visit(context.action());
             FreeTmpVariables();
             stream.WriteLine("return awk_undefined();");
-            currentCScope = previousCScope;
             stream.ExitBlock();
-            currentScope = previousScope;
+            awkScope.ExitFunction();
+            cScope.ExitFunction();
             
             return new NodeCompilationResult();
         }
@@ -198,13 +194,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string itemNameAction = symbolTable.NewItemCName();
             stream.WriteLine($"void {itemNameAction}()");
             stream.EnterBlock();
-            string previousCScope = currentCScope;
-            currentCScope = $"item:{itemNameAction}";
+            cScope.EnterFunction(itemNameAction);
 
             Visit(context.action());
 
             FreeTmpVariables();
-            currentCScope = previousCScope; 
+            cScope.ExitFunction();
             stream.ExitBlock();
             return new NodeCompilationResult(
                 itemNameAction,
@@ -221,8 +216,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             stream.WriteLine($"void {itemNameSimplePattern}()");
             stream.EnterBlock();
-            string previousCScope = currentCScope;
-            currentCScope = $"item:{itemNameSimplePattern}";
+            cScope.EnterFunction(itemNameSimplePattern);
 
             stream.WriteLine($"if({simplePatternName}())");
             stream.EnterBlock();
@@ -231,9 +225,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             stream.ExitBlock();
             FreeTmpVariables();
-            currentCScope = previousCScope;
+            cScope.ExitFunction();
             stream.ExitBlock();
-                return new NodeCompilationResult(
+            return new NodeCompilationResult(
                 itemNameSimplePattern,
                 CType.ItemFunction
             );
@@ -246,8 +240,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         string patternName = symbolTable.NewPatternCName();
         stream.WriteLine($"int {patternName}()");
         stream.EnterBlock();
-        string previousCScope = currentCScope;
-        currentCScope = $"pattern:{patternName}";
+        cScope.EnterFunction(patternName);
         
         // BEGIN
         if (context.BEGIN() is not null)
@@ -280,7 +273,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine($"return {returnValueCName};");
         }
 
-        currentCScope = previousCScope;
+        cScope.ExitFunction();
         stream.ExitBlock();
         return new NodeCompilationResult(
             patternName,
@@ -339,7 +332,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
 
-        string valuesArrayName = symbolTable.NewTemporaryCName(currentCScope, true);
+        string valuesArrayName = symbolTable.NewTemporaryCName(cScope, true);
 
         stream.WriteLine(
             $"AwkValue {valuesArrayName}[] = {{ {string.Join(", ", compiledExpressionNames)} }};"
@@ -378,7 +371,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         // return expr 
         if (context.RETURN() != null)
         {
-            if (!currentScope.StartsWith("function:"))
+            if (!awkScope.InFunction())
             {
                 throw new ArgumentException(
                     "'return' can be used only inside a function."
@@ -524,7 +517,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string functionName = context.NAME().GetText();
 
             Symbol functionSymbol =
-                symbolTable.Lookup(functionName, "global")
+                symbolTable.Lookup(functionName, awkScope)
                 ?? throw new ArgumentException(
                     $"Function '{functionName}' is not defined."
                 );
@@ -964,12 +957,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (context.NAME() != null && context.expr_list() == null)
         {
             string name = context.NAME().GetText();
-            Symbol symbol = symbolTable.Lookup(name, currentScope)
-                ?? throw new Exception($"missing symbol with name: {name} and scope: {currentScope}");
+            Symbol symbol = symbolTable.Lookup(name, awkScope)
+                ?? throw new Exception($"missing symbol with name: {name}");
             if (symbol.NameInC is null)
-                throw new Exception($"missing NameInC for symbol with name: {name} and scope: {currentScope}");
+                throw new Exception($"missing NameInC for symbol with name: {name}");
             if (symbol.Type != SymbolType.Variable && symbol.Type != SymbolType.Parameter)
-                throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name} and scope: {currentScope}");
+                throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name}");
             return new NodeCompilationResult(
                 symbol.NameInC,
                 CType.General

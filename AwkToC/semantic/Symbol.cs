@@ -7,9 +7,6 @@ public class Symbol
     public string Scope { get; set; } = "global";
     public int Line { get; set; }
     public int Column { get; set; }
-    public bool IsAssigned { get; set; }
-    public bool IsUsed { get; set; }
     public bool IsArray { get; set; }
-    public List<string> Parameters { get; set; } = new();
     public string? NameInC { get; set; } = null;
 }
