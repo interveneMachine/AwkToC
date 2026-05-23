@@ -23,7 +23,8 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
                 Type = SymbolType.Function,
                 Scope = "global",
                 Line = context.Start.Line,
-                Column = context.Start.Column
+                Column = context.Start.Column,
+                Returns = false
             });
 
             awkScope.EnterFunction(functionName);
@@ -40,6 +41,22 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
         }
 
         return base.VisitItem(context);
+    }
+
+    public override object? VisitTerminatable_statement([NotNull] AwkParser.Terminatable_statementContext context)
+    {
+        if (context.RETURN() != null)
+        {
+            if (awkScope.GetScope() == "global")
+                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Return statement outside of function");
+            string name = awkScope.GetScope().Split(":")[1];
+            Symbol function = table.Lookup(name, awkScope)
+                ?? throw new Exception($"missing {name} from table");
+            if (function.Type != SymbolType.Function)
+                throw new Exception($"symbol {name} is not a function");
+            function.Returns = true;
+        }
+        return base.VisitTerminatable_statement(context);
     }
     public override object? VisitParam_list([NotNull] AwkParser.Param_listContext context)
     {
@@ -68,8 +85,8 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
             {
                 if (s.IsArray != isArray)
                     throw new Exception(s.IsArray
-                        ? $"[line {context.Start.Line}] attempt to use array `{name}` in a scalar context"
-                        : $"[line {context.Start.Line}] attempt to use scalar `{name}` in an array context");
+                        ? $"[{context.Start.Line}:{context.Start.Column}] attempt to use array `{name}` in a scalar context"
+                        : $"[{context.Start.Line}:{context.Start.Column}] attempt to use scalar `{name}` in an array context");
                 return null;
             }
             table.Add(new Symbol

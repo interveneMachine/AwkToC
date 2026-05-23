@@ -8,5 +8,6 @@ public class Symbol
     public int Line { get; set; }
     public int Column { get; set; }
     public bool IsArray { get; set; }
+    public bool Returns { get;  set; }
     public string? NameInC { get; set; } = null;
 }

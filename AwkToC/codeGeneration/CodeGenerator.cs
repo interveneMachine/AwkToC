@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
 
@@ -180,7 +179,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             Visit(context.action());
             FreeTmpVariables();
-            stream.WriteLine("return awk_undefined();");
+            if (!function.Returns) stream.WriteLine("return awk_undefined();");
             stream.ExitBlock();
             awkScope.ExitFunction();
             cScope.ExitFunction();
