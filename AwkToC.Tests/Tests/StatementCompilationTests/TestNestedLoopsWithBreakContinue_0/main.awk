@@ -1,0 +1,13 @@
+BEGIN {
+    for (i = 1; i <= 3; i++)
+    {
+        for (j = 1; j <= 4; j++)
+        {
+            if (j == 2)
+                continue
+            if (j == 4)
+                break
+            print i, j
+        }
+    }
+}
