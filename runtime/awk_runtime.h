@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 extern char* FS;
+extern char* CONVFMT;
 
 typedef enum
 {

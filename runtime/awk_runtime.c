@@ -7,6 +7,7 @@
 #include <regex.h>
 
 char* FS = " ";
+char* CONVFMT =  "%.6g";
 
 
 static char* awk_strdup(const char* value)
@@ -355,7 +356,7 @@ char* awk_to_string(AwkValue value)
     if (value.type == AWK_NUMBER)
     {
         char buffer[64];
-        snprintf(buffer, sizeof(buffer), "%.15g", value.number);
+        snprintf(buffer, sizeof(buffer), CONVFMT, value.number);
         return awk_strdup(buffer);
     }
 
