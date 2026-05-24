@@ -25,7 +25,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         return new NodeCompilationResult(
             temporaryName,
-            CType.General
+            ResultType.General
         );
     }
 
@@ -42,6 +42,29 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
         return result.ReturnName;
+    }
+
+    private NodeCompilationResult EmitLvalue(string lvalueName, ResultType? type)
+    {
+        switch (type)
+        {
+            case ResultType.General:
+            return EmitTemporary(
+                $"awk_copy({lvalueName})",
+                true
+            );
+            case ResultType.Int:
+            return EmitTemporary(
+                $"awk_number((double){lvalueName})",
+                false
+            );
+            case ResultType.CString:
+            return EmitTemporary(
+                $"awk_string({lvalueName})",
+                true
+            );
+        }
+        throw new Exception("unhandled ResultType");
     }
 
     private void FreeTmpVariables()
@@ -81,12 +104,13 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 begin = RequireReturnName(result, "begin item");
             else if(i.pattern() is not null && i.pattern().END() is not null)
                 end = RequireReturnName(result, "end item");
-            else if(result.Type == CType.ItemFunction)
+            else if(result.Type == ResultType.ItemFunction)
                 itemsResults.Add(RequireReturnName(result, "item"));
         }
         
         stream.WriteLine("int main(int argc, char* argv[])");
         stream.EnterBlock();
+        stream.WriteLine("NR = 0;");
         if (begin is not null) stream.WriteLine($"{begin}();");
         stream.WriteLine("FILE* file = fopen(argv[1], \"r\");");
         stream.WriteLine("char buffer[1024];");
@@ -95,6 +119,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream.EnterBlock();
         stream.WriteLine("remove_newline(buffer);");
         stream.WriteLine("fields = fields_string(buffer);");
+        stream.WriteLine("NR++;");
         itemsResults.Select(function => $"{function}();")
                     .ToList().ForEach(stream.WriteLine);
         stream.WriteLine("fields_free(&fields);");
@@ -147,7 +172,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             return new NodeCompilationResult(
                 itemName,
-                CType.ItemFunction
+                ResultType.ItemFunction
             );
         }
 
@@ -202,7 +227,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.ExitBlock();
             return new NodeCompilationResult(
                 itemNameAction,
-                CType.ItemFunction
+                ResultType.ItemFunction
             );
         }
         
@@ -228,7 +253,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.ExitBlock();
             return new NodeCompilationResult(
                 itemNameSimplePattern,
-                CType.ItemFunction
+                ResultType.ItemFunction
             );
         }
         throw new Exception("unrecognised item rule");
@@ -276,7 +301,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream.ExitBlock();
         return new NodeCompilationResult(
             patternName,
-            CType.Function
+            ResultType.Function
         );
     }
 
@@ -331,7 +356,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
 
-        string valuesArrayName = symbolTable.NewTemporaryCName(cScope, true);
+        string valuesArrayName = symbolTable.NewTemporaryCName(cScope, false);
 
         stream.WriteLine(
             $"AwkValue {valuesArrayName}[] = {{ {string.Join(", ", compiledExpressionNames)} }};"
@@ -360,6 +385,58 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         expressions.Add(context.expr());
 
         return expressions;
+    }
+
+    public override NodeCompilationResult VisitTerminated_statement([NotNull] AwkParser.Terminated_statementContext context)
+    {
+        // IF LPAREN expr RPAREN newline_opt terminated_statement
+        // IF LPAREN expr RPAREN newline_opt terminated_statement ELSE newline_opt terminated_statement
+        if (context.IF() != null)
+        {
+            NodeCompilationResult conditionResults = Visit(context.expr());
+            string conditionName = RequireReturnName(conditionResults, "expr");
+            stream.WriteLine($"if(awk_is_truthy({conditionName}))");
+            stream.EnterBlock();
+            cScope.EnterIf(context.Start.Line, context.Start.Column);
+
+            Visit(context.terminated_statement()[0]);
+
+            FreeTmpVariables();
+            cScope.ExitIf();
+            stream.ExitBlock();
+
+            // ELSE newline_opt terminated_statement
+            if (context.ELSE() != null)
+            {
+                stream.WriteLine("else");
+                stream.EnterBlock();
+                cScope.EnterElse(context.Start.Line, context.Start.Column);
+
+                Visit(context.terminated_statement()[1]);
+
+                FreeTmpVariables();
+                cScope.ExitElse();
+                stream.ExitBlock();
+            }
+            return new NodeCompilationResult();
+        }
+
+        // action newline_opt
+        if (context.action() != null)
+        {
+            Visit(context.action());
+            return new NodeCompilationResult();
+        }
+
+        // terminatable_statement NEWLINE newline_opt
+        // terminatable_statement SEMICOLON newline_opt
+        if (context.terminatable_statement() != null)
+        {
+            Visit(context.terminatable_statement());
+            return new NodeCompilationResult();
+        }
+        
+        throw new Exception("unrecognised terminated_statement rule");
     }
 
     public override NodeCompilationResult VisitTerminatable_statement(
@@ -595,14 +672,45 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             
             // lvalue
             if (context.ChildCount == 1)
-                return EmitTemporary(
-                    $"awk_copy({lvalueName})",
-                    true
-                );
+            {
+                return EmitLvalue(lvalueName, lvalue.Type);
+            }
+
+            switch (lvalue.Type)
+            {
+            case ResultType.Int:
+                // lvalue INCR
+                if (context.GetChild(1).GetText() == "++")
+                    return EmitTemporary(
+                        $"awk_number((double){lvalueName}++)",
+                        false
+                    );
+                // INCR lvalue
+                if (context.GetChild(0).GetText() == "++")
+                    return EmitTemporary(
+                        $"awk_number((double)++{lvalueName})",
+                        false
+                    );
+                // lvalue DECR
+                if (context.GetChild(1).GetText() == "--")
+                    return EmitTemporary(
+                        $"awk_number((double){lvalueName}--)",
+                        false
+                    );
+                // DECR lvalue
+                if (context.GetChild(0).GetText() == "--")
+                    return EmitTemporary(
+                        $"awk_number((double)--{lvalueName})",
+                        false
+                    );
+                throw new Exception("unknown rule");
+            case ResultType.CString:
+                throw new Exception("unable to add to char*"); // TODO test how it works in other interpreters
+            }
             
-            NodeCompilationResult result = EmitTemporary(
-                $"awk_copy({lvalueName})",
-                true
+            NodeCompilationResult result = EmitLvalue(
+                lvalueName,
+                lvalue.Type
             );
             string resultName =
                 RequireReturnName(result, "lvalue");
@@ -962,9 +1070,15 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 throw new Exception($"missing NameInC for symbol with name: {name}");
             if (symbol.Type != SymbolType.Variable && symbol.Type != SymbolType.Parameter)
                 throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name}");
+            var type = symbol.TypeInC switch
+            {
+                CType.Int => ResultType.Int,
+                CType.CString => ResultType.CString,
+                _ => ResultType.General,
+            };
             return new NodeCompilationResult(
                 symbol.NameInC,
-                CType.General
+                type
             );
         }
 
@@ -975,7 +1089,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string name = RequireReturnName(result, "field expr");
             return new NodeCompilationResult(
                 $"fields_get(fields, awk_to_int({name}))",
-                CType.General
+                ResultType.General
             );
         }
 

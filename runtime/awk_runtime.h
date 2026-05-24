@@ -5,6 +5,7 @@
 
 extern char* FS;
 extern char* CONVFMT;
+extern int NR;
 
 typedef enum
 {

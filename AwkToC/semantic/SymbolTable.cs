@@ -10,6 +10,35 @@ public class SymbolTable
     private int temporaryCounter = 0;
     private int patternCounter = 0;
     private int itemCounter = 0;
+
+    public SymbolTable()
+    {
+        Add(new Symbol
+        {
+            Name = "NR",
+            Scope = "global",
+            Type = SymbolType.Variable,
+            IsPredifined = true,
+            TypeInC = CType.Int
+        });
+        Add(new Symbol
+        {
+            Name = "FS",
+            Scope = "global",
+            Type = SymbolType.Variable,
+            IsPredifined = true,
+            TypeInC = CType.CString
+        });
+        Add(new Symbol
+        {
+            Name = "CONVFMT",
+            Scope = "global",
+            Type = SymbolType.Variable,
+            IsPredifined = true,
+            TypeInC = CType.CString
+        });
+    }
+
     public void Add(Symbol symbol)
     {
         string key = $"{symbol.Scope}:{symbol.Name}";
@@ -77,7 +106,7 @@ public class SymbolTable
 
     public IEnumerable<Symbol> AllVariables()
     {
-        return symbols.Values.Where(s => s.Type == SymbolType.Variable);
+        return symbols.Values.Where(s => s.Type == SymbolType.Variable && !s.IsPredifined);
     }
 
     public List<CSymbol> AllTmpVariablesInScope(CScope cScope)

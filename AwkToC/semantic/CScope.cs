@@ -24,6 +24,16 @@ public class CScope
         scopes.Pop(); // TODO improve error handling
     }
 
+    public void EnterElse(int line, int column)
+    {
+        scopes.Push($"else[{line},{column}]");
+    }
+
+    public void ExitElse()
+    {
+        scopes.Pop();
+    }
+
     public void EnterWhile(int line, int column)
     {
         scopes.Push($"while[{line},{column}]");

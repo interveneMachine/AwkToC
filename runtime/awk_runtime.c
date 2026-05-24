@@ -8,6 +8,7 @@
 
 char* FS = " ";
 char* CONVFMT =  "%.6g";
+int NR = 0;
 
 
 static char* awk_strdup(const char* value)

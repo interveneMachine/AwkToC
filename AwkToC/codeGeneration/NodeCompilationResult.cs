@@ -4,13 +4,13 @@ class NodeCompilationResult
 {
     public string? ReturnName { get; set; }
 
-    public CType? Type { get; set; }
+    public ResultType? Type { get; set; }
 
     public NodeCompilationResult()
     {
     }
 
-    public NodeCompilationResult(string returnName, CType type)
+    public NodeCompilationResult(string returnName, ResultType type)
     {
         ReturnName = returnName;
         Type = type;
