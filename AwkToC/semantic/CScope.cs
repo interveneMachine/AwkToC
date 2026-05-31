@@ -44,8 +44,37 @@ public class CScope
         scopes.Pop();
     }
 
+    public void EnterCondition(int line, int column)
+    {
+        scopes.Push($"condition[{line},{column}]");
+    }
+
+    public void ExitCondition()
+    {
+        scopes.Pop();
+    }
+
     public string GetScope()
     {
         return string.Join(":", scopes);
+    }
+
+    public List<string> GetScopesIn(char scopeName)
+    {
+        List<string> result = new();
+        Stack<string> dropped = new();
+        string topScope;
+        do
+        {
+            if (scopes.Count == 0)
+                throw new Exception("tried to use break/continoue outside of loop");
+            topScope = scopes.Peek();
+            string currentScope = GetScope();
+            result.Add(currentScope);
+            dropped.Push(scopes.Pop());
+        } while (topScope[0] != scopeName);
+        while (dropped.Count != 0)
+            scopes.Push(dropped.Pop());
+        return result;
     }
 }

@@ -63,7 +63,7 @@ terminated_statement
     | IF LPAREN expr RPAREN newline_opt terminated_statement
     | IF LPAREN expr RPAREN newline_opt terminated_statement ELSE newline_opt terminated_statement
     | WHILE LPAREN expr RPAREN newline_opt terminated_statement
-    | FOR LPAREN simple_statement_opt SEMICOLON expr_opt SEMICOLON simple_statement_opt RPAREN newline_opt terminated_statement
+    | FOR LPAREN simple_statement? SEMICOLON expr? SEMICOLON simple_statement? RPAREN newline_opt terminated_statement
     | FOR LPAREN NAME IN NAME RPAREN newline_opt terminated_statement
     | SEMICOLON newline_opt
     | terminatable_statement NEWLINE newline_opt
@@ -75,7 +75,7 @@ unterminated_statement
     | IF LPAREN expr RPAREN newline_opt unterminated_statement
     | IF LPAREN expr RPAREN newline_opt terminated_statement ELSE newline_opt unterminated_statement
     | WHILE LPAREN expr RPAREN newline_opt unterminated_statement
-    | FOR LPAREN simple_statement_opt SEMICOLON expr_opt SEMICOLON simple_statement_opt RPAREN newline_opt unterminated_statement
+    | FOR LPAREN simple_statement? SEMICOLON expr? SEMICOLON simple_statement? RPAREN newline_opt unterminated_statement
     | FOR LPAREN NAME IN NAME RPAREN newline_opt unterminated_statement
     ;
 
@@ -85,14 +85,9 @@ terminatable_statement
     | CONTINUE
     | NEXT
     | NEXTFILE
-    | EXIT expr_opt
-    | RETURN expr_opt
+    | EXIT expr?
+    | RETURN expr?
     | DO newline_opt terminated_statement WHILE LPAREN expr RPAREN
-    ;
-
-simple_statement_opt
-    : /* empty */
-    | simple_statement
     ;
 
 simple_statement
@@ -133,11 +128,6 @@ expr_list
 multiple_expr_list
     : expr COMMA newline_opt expr
     | multiple_expr_list COMMA newline_opt expr
-    ;
-
-expr_opt
-    : /* empty */
-    | expr
     ;
 
 expr

@@ -10,6 +10,7 @@ public class SymbolTable
     private int temporaryCounter = 0;
     private int patternCounter = 0;
     private int itemCounter = 0;
+    private int continueTargetCounter = 0;
 
     public SymbolTable()
     {
@@ -104,15 +105,31 @@ public class SymbolTable
         return AddCName($"item{itemCounter++}");
     }
 
+    public string NewContinueTarget()
+    {
+        return AddCName($"_incr_{continueTargetCounter++}");
+    }
+
     public IEnumerable<Symbol> AllVariables()
     {
         return symbols.Values.Where(s => s.Type == SymbolType.Variable && !s.IsPredifined);
     }
 
-    public List<CSymbol> AllTmpVariablesInScope(CScope cScope)
+    public List<CSymbol> AllTmpVariablesInCurrentScope(CScope cScope)
     {
         if (TmpSymbols.TryGetValue(cScope.GetScope(), out List<CSymbol>? value))
             return value;
         return [];
+    }
+
+    public List<CSymbol> AllTmpVariablesIn(CScope cScope, string scopeName)
+    {
+        List<CSymbol> result = new();
+        foreach(string scope in cScope.GetScopesIn(scopeName[0]))
+        {
+            if (TmpSymbols.TryGetValue(scope, out List<CSymbol>? value))
+                result.AddRange(value);
+        }
+        return result;
     }
 }

@@ -10,6 +10,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     private AwkScope awkScope = new();
     private CScope cScope = new();
+    private Stack<string?> continueTargets = new();
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
@@ -69,12 +70,23 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     private void FreeTmpVariables()
     {
-        foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesInScope(cScope))
+        foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesInCurrentScope(cScope))
         {
             if (tmpSymbol.IsMemoryAllocated)
             {
                 stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
                 tmpSymbol.IsMemoryAllocated = false;
+            }
+        }
+    }
+
+    private void FreeTmpVariablesIn(string scopeName)
+    {
+        foreach(CSymbol tmpSymbol in symbolTable.AllTmpVariablesIn(cScope, scopeName))
+        {
+            if (tmpSymbol.IsMemoryAllocated)
+            {
+                stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
             }
         }
     }
@@ -421,6 +433,77 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             return new NodeCompilationResult();
         }
 
+        // WHILE LPAREN expr RPAREN newline_opt terminated_statement
+        if (context.WHILE() != null)
+        {
+            stream.WriteLine("while(1)");
+            stream.EnterBlock();
+            cScope.EnterWhile(context.Start.Line, context.Start.Column);
+
+            cScope.EnterCondition(context.Start.Line, context.Start.Column);
+            NodeCompilationResult exprResult = Visit(context.expr());
+            string exprName = RequireReturnName(exprResult, "expr");
+            stream.WriteLine($"if(!awk_is_truthy({exprName}))");
+            stream.EnterBlock();
+            FreeTmpVariablesIn("while");
+            stream.WriteLine("break;");
+            stream.ExitBlock();
+
+            continueTargets.Push(null);
+            Visit(context.terminated_statement()[0]);
+
+            FreeTmpVariables();
+            cScope.ExitWhile();
+            stream.ExitBlock();
+            continueTargets.Pop();
+            return new NodeCompilationResult();
+        }
+
+        // FOR LPAREN simple_statement? SEMICOLON expr? SEMICOLON simple_statement? RPAREN newline_opt terminated_statement
+        if (context.FOR() != null &&
+            context.simple_statement() != null)
+        {
+            if (context.simple_statement()[0] != null)
+                Visit(context.simple_statement()[0]);
+            stream.WriteLine("while(1)");
+            stream.EnterBlock();
+            cScope.EnterWhile(context.Start.Line, context.Start.Column);
+
+            if (context.expr() != null)
+            {
+                NodeCompilationResult exprResult = Visit(context.expr());
+                string exprName = RequireReturnName(exprResult, "expr");
+                stream.WriteLine($"if(!awk_is_truthy({exprName}))");
+                stream.EnterBlock();
+                FreeTmpVariablesIn("while");
+                stream.WriteLine("break;");
+                stream.ExitBlock();
+            }
+            continueTargets.Push(symbolTable.NewContinueTarget());
+            Visit(context.terminated_statement()[0]);
+            
+            FreeTmpVariables();
+
+            if (context.simple_statement()[1] != null)
+            {
+                // incr instruction in for loop, continue jumps to this label with goto
+                stream.WriteLine($"{continueTargets.Peek()}:");
+                Visit(context.simple_statement()[1]);
+                FreeTmpVariables();
+            }
+
+            continueTargets.Pop();
+            stream.ExitBlock();
+            cScope.ExitWhile();
+            return new NodeCompilationResult();
+        }
+
+        // FOR LPAREN NAME IN NAME RPAREN newline_opt terminated_statement
+        if (context.IN() != null)
+        {
+            throw new Exception("FOR IN loop is not supported");
+        }
+
         // action newline_opt
         if (context.action() != null)
         {
@@ -435,6 +518,10 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             Visit(context.terminatable_statement());
             return new NodeCompilationResult();
         }
+
+        // SEMICOLON newline_opt
+        if (context.SEMICOLON() != null)
+            return new NodeCompilationResult();
         
         throw new Exception("unrecognised terminated_statement rule");
     }
@@ -443,6 +530,25 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         AwkParser.Terminatable_statementContext context
     )
     {
+        // BREAK
+        if (context.BREAK() != null)
+        {
+            FreeTmpVariablesIn("while");
+            stream.WriteLine("break;");
+            return new NodeCompilationResult();
+        }
+
+        // CONTINUE
+        if (context.CONTINUE() != null)
+        {
+            FreeTmpVariablesIn("while");
+            if (continueTargets.Peek() != null)
+                stream.WriteLine($"goto {continueTargets.Peek()};");
+            else
+                stream.WriteLine("continue;");
+            return new NodeCompilationResult();
+        }
+
         // return 
         // return expr 
         if (context.RETURN() != null)
@@ -455,12 +561,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             }
 
             AwkParser.ExprContext? returnExpression =
-                context.expr_opt()?.expr();
+                context.expr();
 
-            // return 
+            // return
             if (returnExpression == null)
             {
-                FreeTmpVariables();
+                FreeTmpVariablesIn("function");
                 stream.WriteLine("return awk_undefined();");
                 return new NodeCompilationResult();
             }
@@ -485,14 +591,24 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                     "return expression"
                 );
             
-            FreeTmpVariables();
+            FreeTmpVariablesIn("function");
 
             stream.WriteLine($"return {returnName};");
 
             return new NodeCompilationResult();
         }
 
-        return VisitChildren(context);
+        if (context.simple_statement() != null)
+        {
+            return Visit(context.simple_statement());
+        }
+
+        if (context.DO() != null)
+        {
+            throw new Exception("DO {} WHILE is not implemented");
+        }
+
+        throw new Exception("unrecognised rule");
     }
 
     private List<AwkParser.ExprContext> CollectFunctionArguments(
