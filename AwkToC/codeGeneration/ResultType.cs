@@ -1,3 +1,5 @@
+using AwkToC.Semantic;
+
 namespace AwkToC.CodeGeneration;
 
 public enum ResultType {
@@ -6,4 +8,5 @@ public enum ResultType {
     ItemFunction,
     Int,
     CString,
+    Array
 }

@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
 
@@ -10,7 +11,24 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
     private AwkScope awkScope = new();
     private CScope cScope = new();
+
+    /// <summary> 
+    /// Stores names of labels, that are used while compiling `continue`, 
+    /// null value is interpreted as missing label, 
+    /// code that labels leeds to is an increment part of for loop
+    /// </summary>
     private Stack<string?> continueTargets = new();
+
+    private static ResultType Convert(CType type)
+    {
+        return type switch
+        {
+            CType.AwkValue => ResultType.General,
+            CType.Int => ResultType.Int,
+            CType.CString => ResultType.CString,
+            _ => ResultType.General,
+        };
+    }
 
     public CodeGenerator(SymbolTable symbolTable, StreamWriter streamWriter)
     {
@@ -64,8 +82,81 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 $"awk_string({lvalueName})",
                 true
             );
+            case ResultType.Array:
+            return EmitTemporary(
+                $"array_get_value({lvalueName})",
+                true
+            );
         }
         throw new Exception("unhandled ResultType");
+    }
+
+    private void AssignToLValue(
+        string lvalueName,
+        ResultType? lvalueType,
+        string valueName,
+        ResultType? valueType
+    )
+    {
+        switch(lvalueType, valueType)
+        {
+            case (ResultType.General, ResultType.General):
+            stream.WriteLine($"awk_free(&{lvalueName});");
+            stream.WriteLine($"{lvalueName} = awk_copy({valueName});");
+            break;
+
+            case (ResultType.General, ResultType.CString):
+            stream.WriteLine($"awk_free(&{lvalueName});");
+            stream.WriteLine($"{lvalueName} = awk_string({valueName});");
+            break;
+
+            case (ResultType.General, ResultType.Int):
+            stream.WriteLine($"awk_free(&{lvalueName});");
+            stream.WriteLine($"{lvalueName} = awk_number({valueName});");
+            break;
+        
+            case (ResultType.Array, ResultType.General):
+            stream.WriteLine($"array_set_value({lvalueName}, awk_copy({valueName}));");
+            break;
+
+            case (ResultType.Array, ResultType.CString):
+            stream.WriteLine($"array_set_value({lvalueName}, awk_string({valueName}));");
+            break;
+
+            case (ResultType.Array, ResultType.Int):
+            stream.WriteLine($"array_set_value({lvalueName}, awk_number({valueName}));");
+            break;
+
+            case (ResultType.Int, ResultType.General):
+            stream.WriteLine($"{lvalueName} = awk_to_int({valueName});");
+            break;
+
+            case (ResultType.Int, ResultType.CString):
+            stream.WriteLine($"{lvalueName} = atoi({valueName});");
+            break;
+
+            case (ResultType.Int, ResultType.Int):
+            stream.WriteLine($"{lvalueName} = {valueName};");
+            break;
+
+            case (ResultType.CString, ResultType.General):
+            stream.WriteLine($"free({lvalueName});");
+            stream.WriteLine($"{lvalueName} = awk_to_string({valueName});");
+            break;
+
+            case (ResultType.CString, ResultType.CString):
+            stream.WriteLine($"free({lvalueName});");
+            stream.WriteLine($"{lvalueName} = awk_strdup({valueName});");
+            break;
+
+            case (ResultType.CString, ResultType.Int):
+            stream.WriteLine($"free({lvalueName});");
+            stream.WriteLine($"{lvalueName} = awk_to_string({{AWK_NUMBER, (double){valueName}, NULL}});");
+            break;
+
+            default:
+                throw new Exception("unknown lvalue type");
+        }
     }
 
     private void FreeTmpVariables()
@@ -101,11 +192,15 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         stream.WriteLine("Fields fields;");
 
-        symbolTable.AllVariables()
-                   .Select(s => s.NameInC
-                        ?? throw new Exception($"variable {s.Name} in global has NameInC=null"))
-                   .ToList()
-                   .ForEach(name => stream.WriteLine($"AwkValue {name};"));
+        foreach (var variable in symbolTable.AllVariables())
+        {
+            string name = variable.NameInC
+                ?? throw new Exception($"variable {variable.Name} in global has NameInC=null");
+            if (variable.IsArray)
+                stream.WriteLine($"Array* {name};");
+            else
+                stream.WriteLine($"AwkValue {name};");
+        }
 
         string? begin = null, end = null;
         List<string> itemsResults = new();
@@ -122,6 +217,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         
         stream.WriteLine("int main(int argc, char* argv[])");
         stream.EnterBlock();
+        symbolTable.AllVariables()
+            .Where(s => s.IsArray)
+            .Select(s => s.NameInC
+                ?? throw new Exception($"variable {s.Name} in global has NameInC=null"))
+            .ToList()
+            .ForEach(name => stream.WriteLine($"{name} = array_init();"));
         stream.WriteLine("NR = 0;");
         if (begin is not null) stream.WriteLine($"{begin}();");
         stream.WriteLine("FILE* file = fopen(argv[1], \"r\");");
@@ -459,6 +560,54 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             return new NodeCompilationResult();
         }
 
+        // FOR LPAREN NAME IN NAME RPAREN newline_opt terminated_statement
+        if (context.IN() != null)
+        {
+            string text = context.NAME()[1].GetText();
+            Symbol arraySymbol = symbolTable.Lookup(text, awkScope)
+                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Missing array {text} from symbol table");
+            string arrayNameInC = arraySymbol.NameInC
+                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Array {text} is missing NameInC parameter");
+            if (!arraySymbol.IsArray)
+                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Symbol {text} is used in array context");
+            
+            text = context.NAME()[0].GetText();
+            Symbol keySymbol = symbolTable.Lookup(text, awkScope)
+                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Missing variable {text} from symbol table");
+            string keyNameInC = keySymbol.NameInC
+                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Variable {text} is missing NameInC parameter");
+            if (keySymbol.Type != SymbolType.Variable)
+                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Symbol {text} is {keySymbol.Type}, expected Variable");
+            if (keySymbol.IsArray)
+                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Array {text} is used in variable context");
+
+            string iteratorName = symbolTable.NewTemporaryCName(cScope, false);
+            stream.WriteLine($"ArrayIterator {iteratorName} = arrayiterator_init({arrayNameInC});");
+            
+            stream.WriteLine("while(1)");
+            stream.EnterBlock(); cScope.EnterWhile(context.Start.Line, context.Start.Column);
+
+            stream.WriteLine($"if(arrayiterator_is_end(&{iteratorName}))");
+            stream.EnterBlock();
+            FreeTmpVariablesIn("while");
+            stream.WriteLine("break;");
+            stream.ExitBlock();
+
+            AssignToLValue(keyNameInC, Convert(keySymbol.TypeInC), $"{iteratorName}.entry->key", ResultType.CString);
+
+            continueTargets.Push(symbolTable.NewContinueTarget());
+            Visit(context.terminated_statement()[0]);
+
+            FreeTmpVariables();
+
+            stream.WriteLine($"{continueTargets.Peek()}:");
+            stream.WriteLine($"arrayiterator_next(&{iteratorName});");
+
+            stream.ExitBlock(); cScope.ExitWhile();
+            continueTargets.Pop();
+            return new NodeCompilationResult();
+        }
+
         // FOR LPAREN simple_statement? SEMICOLON expr? SEMICOLON simple_statement? RPAREN newline_opt terminated_statement
         if (context.FOR() != null &&
             context.simple_statement() != null)
@@ -496,12 +645,6 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.ExitBlock();
             cScope.ExitWhile();
             return new NodeCompilationResult();
-        }
-
-        // FOR LPAREN NAME IN NAME RPAREN newline_opt terminated_statement
-        if (context.IN() != null)
-        {
-            throw new Exception("FOR IN loop is not supported");
         }
 
         // action newline_opt
@@ -623,6 +766,15 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
         CollectExprList(context.expr_list(), arguments);
+        return arguments;
+    }
+
+    private List<AwkParser.ExprContext> CollectListArguments(
+        AwkParser.Expr_listContext context
+    )
+    {
+        List<AwkParser.ExprContext> arguments = new();
+        CollectExprList(context, arguments);
         return arguments;
     }
 
@@ -820,6 +972,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                         false
                     );
                 throw new Exception("unknown rule");
+            
             case ResultType.CString:
                 throw new Exception("unable to add to char*"); // TODO test how it works in other interpreters
             }
@@ -831,8 +984,63 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             string resultName =
                 RequireReturnName(result, "lvalue");
             
-            stream.WriteLine($"awk_free(&{lvalueName});");
+            if (lvalue.Type == ResultType.Array)
+            {
+                if (context.GetChild(1).GetText() == "++")
+                {
+                    stream.WriteLine($"awk_set_value({lvalueName}, awk_add({resultName}, awk_number(1)));");
+                    return new NodeCompilationResult(
+                        resultName,
+                        ResultType.General
+                    );
+                }
 
+                if (context.GetChild(1).GetText() == "--")
+                {
+                    stream.WriteLine($"awk_set_value({lvalueName}, awk_sub({resultName}, awk_number(1)));");
+                    return new NodeCompilationResult(
+                        resultName,
+                        ResultType.General
+                    );
+                }
+
+                if (context.GetChild(0).GetText() == "++")
+                {
+                    var valueResult = EmitTemporary(
+                        $"awk_add({resultName}, awk_number(1))",
+                        false
+                    );
+                    var valueName = RequireReturnName(
+                        valueResult,
+                        "incr lvalue"
+                    );
+                    stream.WriteLine($"awk_set_value({lvalueName}, {valueName});");
+                    return new NodeCompilationResult(
+                        valueName,
+                        ResultType.General
+                    );
+                }
+
+                if (context.GetChild(0).GetText() == "--")
+                {
+                    var valueResult = EmitTemporary(
+                        $"awk_sub({resultName}, awk_number(1))",
+                        false
+                    );
+                    var valueName = RequireReturnName(
+                        valueResult,
+                        "incr lvalue"
+                    );
+                    stream.WriteLine($"awk_set_value({lvalueName}, {valueName});");
+                    return new NodeCompilationResult(
+                        valueName,
+                        ResultType.General
+                    );
+                }
+            }
+            
+            stream.WriteLine($"awk_free(&{lvalueName});");
+            
             // INCR lvalue
             if (context.GetChild(0).GetText() == "++")
             {
@@ -991,6 +1199,15 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 string valueName =
                     RequireReturnName(value, "assign(expr)");
                 
+                if (lvalue.Type == ResultType.Array)
+                {
+                    stream.WriteLine($"array_set_value({lvalueName}, awk_copy({valueName}));");
+                    return new NodeCompilationResult(
+                        valueName,
+                        ResultType.General
+                    );
+                }
+
                 stream.WriteLine($"awk_free(&{lvalueName});");
 
                 return EmitTemporary(
@@ -1185,7 +1402,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             if (symbol.NameInC is null)
                 throw new Exception($"missing NameInC for symbol with name: {name}");
             if (symbol.Type != SymbolType.Variable && symbol.Type != SymbolType.Parameter)
-                throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name}");
+                throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name}"); // TODO improve error
             var type = symbol.TypeInC switch
             {
                 CType.Int => ResultType.Int,
@@ -1210,7 +1427,40 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
         // NAME LBRACKET expr_list RBRACKET
-        throw new NotSupportedException("list as an lvalue is not supported");
+        if (context.LBRACKET() != null)
+        {
+            string text = context.NAME().GetText();
+            Symbol array = symbolTable.Lookup(text, awkScope)
+                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Missing array {text} from symbol table");
+            string nameInC = array.NameInC
+                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Array {text} is missing NameInC parameter");
+            if (!array.IsArray)
+                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Symbol {text} is used in array context");
+
+            List<AwkParser.ExprContext> exprContexts = CollectListArguments(context.expr_list());
+            List<string> exprNames = [];
+            foreach (var exprContext in exprContexts)
+            {
+                var exprResult = Visit(exprContext);
+                exprNames.Add(RequireReturnName(exprResult, "array argument expr"));
+            }
+            string argumentName = symbolTable.NewTemporaryCName(cScope, false);
+            stream.WriteLine($"AwkValue {argumentName}[] = {{ {string.Join(", ", exprNames)} }};");
+            var concatenatedArgumentResult = EmitTemporary(
+                $"awk_concat_array_arg({exprNames.Count}, {argumentName})",
+                true
+            );
+            string concatenatedArgumentName = RequireReturnName(
+                concatenatedArgumentResult,
+                "concatenation of array arguments"
+            );
+            return new NodeCompilationResult(
+                $"{nameInC}, {concatenatedArgumentName}",
+                ResultType.Array
+            );
+        }
+
+        throw new Exception("unknown lvalue rule");
     }
 
     public void Close()

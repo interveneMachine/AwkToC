@@ -6,6 +6,7 @@
 extern char* FS;
 extern char* CONVFMT;
 extern int NR;
+extern char* SUBSEP;
 
 typedef enum
 {
@@ -26,6 +27,38 @@ typedef struct
     char** data;
     size_t size;
 } Fields;
+
+typedef struct ArrayEntry
+{
+    char* key;
+    AwkValue value;
+    struct ArrayEntry* next;
+} ArrayEntry;
+
+typedef struct
+{
+    ArrayEntry** entries;
+    size_t capacity;
+    size_t size;
+} Array;
+
+typedef struct
+{
+    Array* array;
+    ArrayEntry* entry;
+    int i;
+} ArrayIterator;
+
+
+Array* array_init();
+AwkValue array_get_value(Array* array, AwkValue key);
+void array_set_value(Array* array, AwkValue key, AwkValue value);
+void array_delete_value(Array* array, AwkValue key);
+void array_delete(Array* array);
+void array_free(Array* array);
+ArrayIterator arrayiterator_init(Array* array);
+int arrayiterator_is_end(ArrayIterator* iter);
+void arrayiterator_next(ArrayIterator* iter);
 
 void remove_newline(char* value);
 Fields fields_string(char* value);
@@ -74,10 +107,12 @@ AwkValue awk_not(AwkValue value);
 
 
 AwkValue awk_concat(AwkValue left, AwkValue right);
+AwkValue awk_concat_array_arg(size_t count, AwkValue* values);
 
 
 
 void awk_print_value(AwkValue value);
 void awk_print_values(size_t count, AwkValue* values);
+char* awk_strdup(const char* value);
 
 #endif

@@ -43,6 +43,34 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
         return base.VisitItem(context);
     }
 
+    public override object? VisitTerminated_statement([NotNull] AwkParser.Terminated_statementContext context)
+    {
+        if (context.IN() != null)
+        {
+            string name = context.NAME()[0].GetText();
+            var s = table.Lookup(name, awkScope);
+            bool isArray = false;
+            if (s != null)
+            {
+                if (s.IsArray != isArray)
+                    throw new Exception(s.IsArray
+                        ? $"[{context.Start.Line}:{context.Start.Column}] attempt to use array `{name}` in a scalar context"
+                        : $"[{context.Start.Line}:{context.Start.Column}] attempt to use scalar `{name}` in an array context");
+                return VisitChildren(context);
+            }
+            table.Add(new Symbol
+            {
+                Name = name,
+                Type = SymbolType.Variable,
+                Scope = awkScope.GetGlobal(),
+                Line = context.Start.Line,
+                Column = context.Start.Column,
+                IsArray = isArray
+            });
+        }
+        return VisitChildren(context);
+    }
+
     public override object? VisitTerminatable_statement([NotNull] AwkParser.Terminatable_statementContext context)
     {
         if (context.RETURN() != null)

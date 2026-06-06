@@ -9,9 +9,10 @@
 char* FS = " ";
 char* CONVFMT =  "%.6g";
 int NR = 0;
+char* SUBSEP = "@";
 
 
-static char* awk_strdup(const char* value)
+char* awk_strdup(const char* value)
 {
     if (value == NULL)
     {
@@ -42,6 +43,204 @@ static char* awk_strdup(const char* value)
 static AwkValue awk_bool(int value)
 {
     return awk_number(value ? 1.0 : 0.0);
+}
+
+static unsigned long djb2(unsigned char *str)
+{
+    unsigned long hash = 5381;
+    int c;
+    while (c = *str++)
+        hash = ((hash << 5) + hash) + c;
+    return hash;
+}
+
+static void array_rehash(Array* array)
+{
+    // should calculate load factor and rehash if needed
+}
+
+Array* array_init()
+{
+    Array* array = malloc(sizeof(Array));
+    if (array == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    array->capacity = 16;
+    array->size = 0;
+    void* tmp = malloc(sizeof(ArrayEntry*)*16);
+    if (tmp == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    array->entries = tmp;
+    for (int i = 0; i < 16; i++)
+        array->entries[i] = NULL;
+    return array;
+}
+
+AwkValue array_get_value(Array *array, AwkValue key)
+{
+    char* string_key = awk_to_string(key);
+    unsigned long hash_key = djb2(string_key) % array->capacity;
+    ArrayEntry* entry = array->entries[hash_key];
+
+    while (entry != NULL)
+    {
+        if (strcmp(entry->key, string_key) == 0)
+        {
+            free(string_key);
+            return awk_copy(entry->value);
+        }
+        entry = entry->next;
+    }
+    free(string_key);
+    return awk_undefined();
+}
+
+void array_set_value(Array *array, AwkValue key, AwkValue value)
+{
+    char* string_key = awk_to_string(key);
+    unsigned long hash_key = djb2(string_key) % array->capacity;
+    ArrayEntry dummy;
+    dummy.next = array->entries[hash_key];
+    ArrayEntry* entry = &dummy;
+
+    while (entry->next != NULL)
+    {
+        entry = entry->next;
+        if (strcmp(entry->key, string_key) == 0)
+        {
+            awk_free(&entry->value);
+            entry->value = value;
+            free(string_key);
+            return;
+        }
+    }
+
+    ArrayEntry* tmp = malloc(sizeof(ArrayEntry));
+    if (tmp == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    entry->next = tmp;
+    tmp->value = value;
+    tmp->key = string_key;
+    tmp->next = NULL;
+    array->size++;
+    array->entries[hash_key] = dummy.next;
+    array_rehash(array);
+}
+
+void array_delete_value(Array *array, AwkValue key)
+{
+    char* string_key = awk_to_string(key);
+    unsigned long hash_key = djb2(string_key) % array->capacity;
+    ArrayEntry dummy;
+    dummy.next = array->entries[hash_key];
+    ArrayEntry* previous = &dummy;
+    ArrayEntry* current = previous->next;
+    while (current != NULL)
+    {
+        if (strcmp(current->key, string_key) == 0)
+        {
+            awk_free(&current->value);
+            free(current->key);
+            current = current->next;
+            free(previous->next);
+            previous->next = current;
+            free(string_key);
+            return;
+        }
+        previous = current;
+        current = current->next;
+    }
+    free(string_key);
+}
+
+void array_delete(Array *array)
+{
+    ArrayEntry *entry, *tmp;
+    int i = 0;
+    while(i < array->capacity)
+    {
+        entry = array->entries[i];
+        if (entry == NULL)
+        {
+            i++;
+            continue;
+        }
+        tmp = entry;
+        entry = entry->next;
+        awk_free(&tmp->value);
+        free(tmp->key);
+        free(tmp);
+        array->size--;
+    }
+}
+
+void array_free(Array *array)
+{
+    if (array == NULL)
+        return;
+    array_delete(array);
+    free(array);
+}
+
+ArrayIterator arrayiterator_init(Array *array)
+{
+    ArrayIterator iter;
+    iter.array = array;
+    iter.i = 0;
+    iter.entry = NULL;
+    
+    for (int i = 0; i < array->capacity; i++)
+    {
+        if (array->entries[i] != NULL)
+        {
+            iter.i = i;
+            iter.entry = array->entries[i];
+            return iter;
+        }
+    }
+    
+    iter.i = array->capacity;
+    iter.entry = NULL;
+    return iter;
+}
+
+int arrayiterator_is_end(ArrayIterator *iter)
+{
+    return iter->entry == NULL || iter->i >= iter->array->capacity;
+}
+
+// will fail if current element of array was deleted
+void arrayiterator_next(ArrayIterator *iter)
+{
+    if (iter->entry == NULL)
+        return;
+    
+    if (iter->entry->next != NULL)
+    {
+        iter->entry = iter->entry->next;
+        return;
+    }
+    
+    iter->i++;
+    while (iter->i < iter->array->capacity)
+    {
+        if (iter->array->entries[iter->i] != NULL)
+        {
+            iter->entry = iter->array->entries[iter->i];
+            return;
+        }
+        iter->i++;
+    }
+    
+    iter->entry = NULL;
 }
 
 void remove_newline(char *value)
@@ -589,7 +788,38 @@ AwkValue awk_concat(AwkValue left, AwkValue right)
     return finalValue;
 }
 
+AwkValue awk_concat_array_arg(size_t count, AwkValue *values)
+{
+    char** strings = malloc(count * sizeof(char*));
+    if (strings == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    size_t len = count * sizeof(char) * strlen(SUBSEP) + 1;
+    for (size_t i = 0; i < count; i++)
+    {
+        strings[i] = awk_to_string(values[i]);
+        len += strlen(strings[i]);
+    }
 
+    char* result = malloc((len + 1) * sizeof(char));
+    if (result == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    strcpy(result, strings[0]);
+    free(strings[0]);
+    for (size_t i = 1; i < count; i++)
+    {
+        strcat(result, SUBSEP);
+        strcat(result, strings[i]);
+        free(strings[i]);
+    }
+    free(strings);
+    return (AwkValue){AWK_STRING, 0.0, result};
+}
 
 void awk_print_value(AwkValue value)
 {
