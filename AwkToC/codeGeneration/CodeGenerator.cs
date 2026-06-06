@@ -1,4 +1,3 @@
-using System.Net.WebSockets;
 using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
 
@@ -600,6 +599,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             FreeTmpVariables();
 
+            // incr instruction in for loop, continue jumps to this label with goto
             stream.WriteLine($"{continueTargets.Peek()}:");
             stream.WriteLine($"arrayiterator_next(&{iteratorName});");
 
@@ -748,7 +748,31 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         if (context.DO() != null)
         {
-            throw new Exception("DO {} WHILE is not implemented");
+            stream.WriteLine("while(1)");
+            stream.EnterBlock();
+            cScope.EnterWhile(context.Start.Line, context.Start.Column);
+            continueTargets.Push(null);
+
+            Visit(context.terminated_statement());
+            FreeTmpVariables();
+
+            cScope.EnterCondition(context.Start.Line, context.Start.Column);
+            var exprResult = Visit(context.expr());
+            string exprName = RequireReturnName(
+                exprResult,
+                "expr"
+            );
+            stream.WriteLine($"if(!awk_is_truthy({exprName}))");
+            stream.EnterBlock();
+            FreeTmpVariablesIn("while");
+            stream.WriteLine("break;");
+            stream.ExitBlock();
+            cScope.ExitCondition();
+
+            continueTargets.Pop();
+            cScope.ExitWhile();
+            stream.ExitBlock();
+            return new NodeCompilationResult();
         }
 
         throw new Exception("unrecognised rule");
