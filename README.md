@@ -13,6 +13,15 @@ Projekt skupia się na:
 - analizie instrukcji, wyrażeń i operacji na danych
 - obsłudze charakterystycznych elementów języka, takich jak pola `$1`, `$2`, instrukcje `print`, `getline` oraz tablice asocjacyjne
 
+# Implementcja
+
+Język implementacji: C# \
+Generator parserów: ANTLR4
+
+# Gramatyka
+
+[Kliknij tutaj](grammar/Awk.g4)
+
 # Uruchamianie
 
 ```console
@@ -39,10 +48,6 @@ by uruchomić skompilowany program awk na \<filename\> należy uruchomić
 ./main.out <filename>
 ```
 
-# Implementcja
-
-Język implementacji: C# \
-Generator parserów: ANTLR4
 
 
 # Spis tokenów 
