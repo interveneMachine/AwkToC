@@ -520,7 +520,6 @@ COMMENT   : '#' ~[\r\n]* -> skip ;
 WS        : [ \t]+ -> skip ;
 ```
 
-W tym miejscu można wkleić opis najważniejszych reguł gramatyki albo fragment samej gramatyki.
 
 ## 8. Wymagania wstępne, instalacja i instrukcja obsługi
 
