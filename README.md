@@ -20,7 +20,7 @@ Generator parserów: ANTLR4
 
 # Gramatyka
 
-[Kliknij tutaj](grammar/Awk.g4)
+[Kliknij tutaj](AwkToC/grammar/Awk.g4)
 
 # Uruchamianie
 
