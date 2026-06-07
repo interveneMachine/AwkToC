@@ -1,6 +1,6 @@
-# Cel projektu
+# Kompilator z AWK do C - TKiK 2026
 
-Celem projektu jest kompilacja programu z języka AWK do C, tak by można było użyć innych kompilatorów np. gcc do stworzenia plików wykonywalnych.
+Celem projektu jest kompilacja programu z języka ***AWK*** do ***C***, tak by można było użyć innych kompilatorów np. gcc do stworzenia plików wykonywalnych.
 AWK to język programowania przeznaczony głównie do przetwarzania tekstu i analizy danych zapisanych w plikach.  Dobrze sprawdza się przy pracy na rekordach i kolumnach, dlatego jest często używany do filtrowania, zliczania i raportowania danych tekstowych.
 
 Programy w AWK zwykle działają w modelu:
@@ -15,8 +15,9 @@ Projekt skupia się na:
 
 # Implementcja
 
-Język implementacji: C# \
-Generator parserów: ANTLR4
+Język implementacji: **C#** \
+Generator parserów: **ANTLR4** \
+Kod wynikowy: **C**
 
 # Gramatyka
 
@@ -126,8 +127,7 @@ Total: 35000
 
 # Autorzy
 
-Piotr Bibrzycki pbibrzycki@student.agh.edu.pl
-
+Piotr Bibrzycki pbibrzycki@student.agh.edu.pl\
 Bartłomiej Cieśla bartekciesla@student.agh.edu.pl
 
 
