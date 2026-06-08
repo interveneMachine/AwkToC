@@ -98,8 +98,8 @@ simple_statement
     ;
 
 print_statement
-    : simple_print_statement
-    | simple_print_statement output_redirection
+    : simple_print_statement output_redirection
+    | simple_print_statement
     ;
 
 simple_print_statement

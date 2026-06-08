@@ -9,5 +9,6 @@ public enum ResultType {
     Int,
     CString,
     Array,
-    Field
+    Field,
+    File
 }

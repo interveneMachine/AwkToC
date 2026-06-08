@@ -839,26 +839,74 @@ void awk_set_default_predefined()
     NR = 0;
 }
 
-void awk_print_value(AwkValue value)
+FILE *awk_output_redirection_write(AwkValue value)
 {
-    char* text = awk_to_string(value);
-    printf("%s\n", text);
-    free(text);
+    char* name = awk_to_string(value);
+    FILE* file = fopen(name, "w");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Failed to open file %s\n", name);
+        exit(1);
+    }
+    free(name);
+    return file;
 }
 
-void awk_print_values(size_t count, AwkValue* values)
+FILE *awk_output_redirection_append(AwkValue value)
+{
+    char* name = awk_to_string(value);
+    FILE* file = fopen(name, "a");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Failed to open file %s\n", name);
+        exit(1);
+    }
+    free(name);
+    return file;
+}
+
+FILE *awk_output_redirection_pipe(AwkValue value)
+{
+    char* name = awk_to_string(value);
+    FILE* file = popen(name, "w");
+    if (file == NULL)
+    {
+        fprintf(stderr, "Failed to open pipe %s\n", name);
+        exit(1);
+    }
+    free(name);
+    return file;
+}
+
+void awk_print_value(AwkValue value, FILE* stream, int type)
+{
+    char* text = awk_to_string(value);
+    fprintf(stream, "%s\n", text);
+    free(text);
+    if (type == 1)
+        fclose(stream);
+    if (type == 2)
+        pclose(stream);
+    
+}
+
+void awk_print_values(size_t count, AwkValue* values, FILE* stream, int type)
 {
     for (size_t i = 0; i < count; i++)
     {
         char* text = awk_to_string(values[i]);
-        printf("%s", text);
+        fprintf(stream, "%s", text);
         free(text);
 
         if (i + 1 < count)
         {
-            printf(" ");
+            fprintf(stream, " ");
         }
     }
 
-    printf("\n");
+    fprintf(stream, "\n");
+    if (type == 1)
+        fclose(stream);
+    if (type == 2)
+        pclose(stream);
 }

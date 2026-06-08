@@ -474,11 +474,47 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         return base.VisitSimple_pattern(context);
     }
 
-    public override NodeCompilationResult VisitSimple_print_statement(
-        AwkParser.Simple_print_statementContext context
-    )
+    public override NodeCompilationResult VisitOutput_redirection([NotNull] AwkParser.Output_redirectionContext context)
     {
-        if (context.PRINT() == null)
+        var exprResult = Visit(context.expr());
+        string exprName = RequireReturnName(exprResult, "expr");
+
+        if (context.GT() != null)
+        {
+            return new NodeCompilationResult(
+                $"awk_output_redirection_write({exprName}), 1",
+                ResultType.File
+            );
+        }
+        if (context.APPEND() != null)
+        {
+            return new NodeCompilationResult(
+                $"awk_output_redirection_append({exprName}), 1",
+                ResultType.File
+            );
+        }
+        if (context.PIPE() != null)
+        {
+            return new NodeCompilationResult(
+                $"awk_output_redirection_pipe({exprName}), 2",
+                ResultType.File
+            );
+        }
+        throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Unrecognised rule for `output_redirection` text: {context.GetText()}");
+    }
+
+    public override NodeCompilationResult VisitPrint_statement([NotNull] AwkParser.Print_statementContext context)
+    {
+        var simple_print_statement = context.simple_print_statement();
+        string cstream;
+        if (context.output_redirection() != null)
+        {
+            var redirectionResult = Visit(context.output_redirection());
+            cstream = RequireReturnName(redirectionResult, "output_redirection");
+        }
+        else cstream = "stdout, 0";
+
+        if (simple_print_statement.PRINT() == null)
         {
             throw new NotSupportedException(
                 "obsługiwane jest tylko 'print', bez 'printf'."
@@ -486,7 +522,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
         var expressionList =
-            context.print_expr_list_opt()?.print_expr_list();
+            simple_print_statement.print_expr_list_opt()?.print_expr_list();
 
         if (expressionList == null)
         {
@@ -513,7 +549,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (compiledExpressionNames.Count == 1)
         {
             stream.WriteLine(
-                $"awk_print_value({compiledExpressionNames[0]});"
+                $"awk_print_value({compiledExpressionNames[0]}, {cstream});"
             );
 
             return new NodeCompilationResult();
@@ -527,7 +563,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         );
 
         stream.WriteLine(
-            $"awk_print_values({compiledExpressionNames.Count}, {valuesArrayName});"
+            $"awk_print_values({compiledExpressionNames.Count}, {valuesArrayName}, {cstream});"
         );
 
         return new NodeCompilationResult();

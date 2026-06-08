@@ -2,6 +2,7 @@
 #define AWK_RUNTIME_H
 
 #include <stddef.h>
+#include <stdio.h>
 
 extern char* FS;
 extern char* CONVFMT;
@@ -111,8 +112,11 @@ AwkValue awk_concat_array_arg(size_t count, AwkValue* values);
 
 
 void awk_set_default_predefined();
-void awk_print_value(AwkValue value);
-void awk_print_values(size_t count, AwkValue* values);
+void awk_print_value(AwkValue value, FILE* stream, int type);
+void awk_print_values(size_t count, AwkValue* values, FILE* stream, int type);
 char* awk_strdup(const char* value);
+FILE* awk_output_redirection_write(AwkValue value);
+FILE* awk_output_redirection_append(AwkValue value);
+FILE* awk_output_redirection_pipe(AwkValue value);
 
 #endif
