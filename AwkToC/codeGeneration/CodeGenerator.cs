@@ -86,6 +86,11 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 $"array_get_value({lvalueName})",
                 true
             );
+            case ResultType.Field:
+            return EmitTemporary(
+                $"fields_get(Fields, {lvalueName})",
+                true
+            );
         }
         throw new Exception("unhandled ResultType");
     }
@@ -113,6 +118,11 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine($"awk_free(&{lvalueName});");
             stream.WriteLine($"{lvalueName} = awk_number({valueName});");
             break;
+
+            case (ResultType.General, ResultType.Field):
+            stream.WriteLine($"awk_free(&{lvalueName});");
+            stream.WriteLine($"{lvalueName} = fields_get(Fields, {valueName});");
+            break;
         
             case (ResultType.Array, ResultType.General):
             stream.WriteLine($"array_set_value({lvalueName}, awk_copy({valueName}));");
@@ -126,6 +136,10 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine($"array_set_value({lvalueName}, awk_number({valueName}));");
             break;
 
+            case (ResultType.Array, ResultType.Field):
+            stream.WriteLine($"array_set_value({lvalueName}, fields_get(Fields, {valueName}));");
+            break;
+
             case (ResultType.Int, ResultType.General):
             stream.WriteLine($"{lvalueName} = awk_to_int({valueName});");
             break;
@@ -136,6 +150,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             case (ResultType.Int, ResultType.Int):
             stream.WriteLine($"{lvalueName} = {valueName};");
+            break;
+
+            case (ResultType.Int, ResultType.Field):
+            var tmpResult = EmitLvalue(valueName, ResultType.Field);
+            string tmpName = RequireReturnName(tmpResult, "field to general");
+            stream.WriteLine($"{lvalueName} = awk_to_int({tmpName});");
             break;
 
             case (ResultType.CString, ResultType.General):
@@ -151,6 +171,11 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             case (ResultType.CString, ResultType.Int):
             stream.WriteLine($"free({lvalueName});");
             stream.WriteLine($"{lvalueName} = awk_to_string({{AWK_NUMBER, (double){valueName}, NULL}});");
+            break;
+
+            case (ResultType.CString, ResultType.Field):
+            stream.WriteLine($"free({lvalueName});");
+            stream.WriteLine($"{lvalueName} = fields_get(Fields, {valueName});");
             break;
 
             default:
@@ -186,6 +211,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
     )
     {
         stream.WriteLine("#include <stdio.h>");
+        stream.WriteLine("#include <stdlib.h>");
         stream.WriteLine("#include \"awk_runtime.h\"");
         stream.HSpace(1);
 
@@ -222,7 +248,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 ?? throw new Exception($"variable {s.Name} in global has NameInC=null"))
             .ToList()
             .ForEach(name => stream.WriteLine($"{name} = array_init();"));
-        stream.WriteLine("NR = 0;");
+        stream.WriteLine("awk_set_default_predefined();");
         if (begin is not null) stream.WriteLine($"{begin}();");
         stream.WriteLine("FILE* file = fopen(argv[1], \"r\");");
         stream.WriteLine("char buffer[1024];");
@@ -1444,9 +1470,14 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             NodeCompilationResult result = Visit(context.expr());
             string name = RequireReturnName(result, "field expr");
+            var idResult = EmitTemporary(
+                $"awk_to_int({name})",
+                false
+            );
+            string idName = RequireReturnName(idResult, "convert to int");
             return new NodeCompilationResult(
-                $"fields_get(fields, awk_to_int({name}))",
-                ResultType.General
+                idName,
+                ResultType.Field
             );
         }
 

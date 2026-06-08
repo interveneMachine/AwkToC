@@ -110,7 +110,7 @@ AwkValue awk_concat(AwkValue left, AwkValue right);
 AwkValue awk_concat_array_arg(size_t count, AwkValue* values);
 
 
-
+void awk_set_default_predefined();
 void awk_print_value(AwkValue value);
 void awk_print_values(size_t count, AwkValue* values);
 char* awk_strdup(const char* value);

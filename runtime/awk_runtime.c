@@ -6,10 +6,10 @@
 #include <math.h>
 #include <regex.h>
 
-char* FS = " ";
-char* CONVFMT =  "%.6g";
-int NR = 0;
-char* SUBSEP = "@";
+char* FS;
+char* CONVFMT;
+int NR;
+char* SUBSEP;
 
 
 char* awk_strdup(const char* value)
@@ -819,6 +819,24 @@ AwkValue awk_concat_array_arg(size_t count, AwkValue *values)
     }
     free(strings);
     return (AwkValue){AWK_STRING, 0.0, result};
+}
+
+void awk_set_default_predefined()
+{
+    FS = malloc(2 * sizeof(char));
+    CONVFMT = malloc(5 * sizeof(char));
+    SUBSEP = malloc(2 * sizeof(char));
+
+    if (FS == NULL || CONVFMT == NULL || SUBSEP == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
+    
+    strcpy(FS, " ");
+    strcpy(CONVFMT, "%.6g");
+    strcpy(SUBSEP, "@");
+    NR = 0;
 }
 
 void awk_print_value(AwkValue value)

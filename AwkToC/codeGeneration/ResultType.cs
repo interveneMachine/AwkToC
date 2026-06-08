@@ -8,5 +8,6 @@ public enum ResultType {
     ItemFunction,
     Int,
     CString,
-    Array
+    Array,
+    Field
 }

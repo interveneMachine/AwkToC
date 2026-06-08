@@ -38,6 +38,14 @@ public class SymbolTable
             IsPredifined = true,
             TypeInC = CType.CString
         });
+        Add(new Symbol
+        {
+            Name = "SUBSEP",
+            Scope = "global",
+            Type = SymbolType.Variable,
+            IsPredifined = true,
+            TypeInC = CType.CString
+        });
     }
 
     public void Add(Symbol symbol)
