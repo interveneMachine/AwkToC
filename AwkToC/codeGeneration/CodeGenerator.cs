@@ -216,6 +216,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream.WriteLine("#include \"awk_runtime.h\"");
         stream.HSpace(1);
 
+        stream.WriteLine("int isBegin;");
         stream.WriteLine("Fields fields;");
 
         foreach (var variable in symbolTable.AllVariables())
@@ -266,6 +267,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             .ToList()
             .ForEach(name => stream.WriteLine($"{name} = array_init();"));
         stream.WriteLine("awk_set_default_predefined();");
+        stream.WriteLine("isBegin = 1;");
 
         if (begin is not null) stream.WriteLine($"{begin}();");
 
@@ -287,6 +289,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             itemsResults.Select(function => $"{function}();")
                         .ToList().ForEach(stream.WriteLine);
             stream.WriteLine("fields_free(&fields);");
+            stream.WriteLine("isBegin = 0;");
             stream.ExitBlock();
         }
 
@@ -430,28 +433,31 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         stream.WriteLine($"int {patternName}()");
         stream.EnterBlock();
         cScope.EnterFunction(patternName);
-        
-        // BEGIN
-        if (context.BEGIN() is not null)
-        {
-            stream.WriteLine("return isBegin;");
-        }
-
-        // END
-        else if (context.END() is not null)
-        {
-            stream.WriteLine("return isEnd;");
-        }
 
         // expr ',' newline_opt expr
-        else if (context.COMMA() is not null)
+        if (context.COMMA() is not null)
         {
-            // TODO
-            throw new NotSupportedException(
-                "expr ',' newline_opt expr nie jest obsługiwane"
-            );
-        }
+            string returnValueCName = symbolTable.AddCName("returnValue");
+            stream.WriteLine($"static int {returnValueCName};");
+            
+            stream.WriteLine($"if (isBegin || !{returnValueCName})");
+            stream.EnterBlock();
+            NodeCompilationResult exprResult = Visit(context.expr()[0]);
+            string exprName = RequireReturnName(exprResult, "expr");
+            stream.WriteLine($"{returnValueCName} = awk_is_truthy({exprName});");
+            FreeTmpVariables();
+            stream.WriteLine($"return {returnValueCName};");
+            stream.ExitBlock();
 
+            stream.WriteLine($"if ({returnValueCName})");
+            stream.EnterBlock();
+            exprResult = Visit(context.expr()[1]);
+            exprName = RequireReturnName(exprResult, "expr");
+            stream.WriteLine($"{returnValueCName} = !awk_is_truthy({exprName});");
+            FreeTmpVariables();
+            stream.WriteLine($"return {returnValueCName};");
+            stream.ExitBlock();
+        }
         // expr
         else
         {
