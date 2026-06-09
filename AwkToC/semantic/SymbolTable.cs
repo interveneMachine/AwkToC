@@ -98,7 +98,7 @@ public class SymbolTable
         return name;
     }
 
-    public string NewTemporaryCName(CScope cScope, bool isMemoryAllocated)
+    public string NewTemporaryCName(CScope cScope, bool isMemoryAllocated, bool isIterator = false)
     {
         string currentScope = cScope.GetScope();
         string name = AddCName($"tmp{temporaryCounter++}");
@@ -108,7 +108,8 @@ public class SymbolTable
         {
             Name = name,
             Scope = currentScope,
-            IsMemoryAllocated = isMemoryAllocated
+            IsMemoryAllocated = isMemoryAllocated,
+            IsIterator = isIterator,
         });
         return name;
     }

@@ -45,9 +45,9 @@ typedef struct
 
 typedef struct
 {
-    Array* array;
-    ArrayEntry* entry;
-    int i;
+    char** keys;
+    size_t size;
+    size_t i;
 } ArrayIterator;
 
 
@@ -60,6 +60,7 @@ void array_free(Array* array);
 ArrayIterator arrayiterator_init(Array* array);
 int arrayiterator_is_end(ArrayIterator* iter);
 void arrayiterator_next(ArrayIterator* iter);
+void arrayiterator_free(ArrayIterator* iter);
 
 void remove_newline(char* value);
 Fields fields_string(char* value);

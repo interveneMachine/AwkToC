@@ -210,54 +210,60 @@ void array_free(Array *array)
 ArrayIterator arrayiterator_init(Array *array)
 {
     ArrayIterator iter;
-    iter.array = array;
+    iter.keys = malloc(sizeof(char*) * array->size);
+    if (iter.keys == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(1);
+    }
     iter.i = 0;
-    iter.entry = NULL;
+    iter.size = array->size;
+    int current = 0;
     
+    ArrayEntry* entry;
     for (int i = 0; i < array->capacity; i++)
     {
         if (array->entries[i] != NULL)
         {
-            iter.i = i;
-            iter.entry = array->entries[i];
-            return iter;
+            entry = array->entries[i];
+            while(entry != NULL)
+            {
+                iter.keys[current] = malloc(sizeof(char) * (strlen(entry->key) + 1));
+                if (iter.keys[current] == NULL)
+                {
+                    fprintf(stderr, "Memory allocation failed\n");
+                    exit(1);
+                }
+                strcpy(iter.keys[current++], entry->key);
+                entry = entry->next;
+            }
         }
     }
-    
-    iter.i = array->capacity;
-    iter.entry = NULL;
     return iter;
 }
 
 int arrayiterator_is_end(ArrayIterator *iter)
 {
-    return iter->entry == NULL || iter->i >= iter->array->capacity;
+    return iter->i >= iter->size;
 }
 
-// will fail if current element of array was deleted
 void arrayiterator_next(ArrayIterator *iter)
 {
-    if (iter->entry == NULL)
-        return;
-    
-    if (iter->entry->next != NULL)
-    {
-        iter->entry = iter->entry->next;
-        return;
-    }
-    
     iter->i++;
-    while (iter->i < iter->array->capacity)
+}
+
+void arrayiterator_free(ArrayIterator* iter)
+{
+    if (iter == NULL || iter->keys == NULL)
+        return;
+    for (size_t i = 0; i < iter->size; i++)
     {
-        if (iter->array->entries[iter->i] != NULL)
-        {
-            iter->entry = iter->array->entries[iter->i];
-            return;
-        }
-        iter->i++;
+        free(iter->keys[i]);
     }
-    
-    iter->entry = NULL;
+    free(iter->keys);
+    iter->keys = NULL;
+    iter->size = 0;
+    iter->i = 0;
 }
 
 void remove_newline(char *value)

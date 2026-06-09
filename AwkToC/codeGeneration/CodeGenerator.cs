@@ -190,7 +190,10 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             if (tmpSymbol.IsMemoryAllocated)
             {
-                stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
+                if (tmpSymbol.IsIterator)
+                    stream.WriteLine($"arrayiterator_free(&{tmpSymbol.Name});");
+                else
+                    stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
                 tmpSymbol.IsMemoryAllocated = false;
             }
         }
@@ -202,7 +205,10 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             if (tmpSymbol.IsMemoryAllocated)
             {
-                stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
+                if (tmpSymbol.IsIterator)
+                    stream.WriteLine($"arrayiterator_free(&{tmpSymbol.Name});");
+                else
+                    stream.WriteLine($"awk_free(&{tmpSymbol.Name});");
             }
         }
     }
@@ -684,7 +690,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             if (keySymbol.Type != SymbolType.Variable || keySymbol.IsArray)
                 throw new WrongTypeException(keySymbol, "variable", context);
 
-            string iteratorName = symbolTable.NewTemporaryCName(cScope, false);
+            string iteratorName = symbolTable.NewTemporaryCName(cScope, true, true);
             stream.WriteLine($"ArrayIterator {iteratorName} = arrayiterator_init({arrayNameInC});");
             
             stream.WriteLine("while(1)");
@@ -696,7 +702,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             stream.WriteLine("break;");
             stream.ExitBlock();
 
-            AssignToLValue(keyNameInC, Convert(keySymbol.TypeInC), $"{iteratorName}.entry->key", ResultType.CString);
+            AssignToLValue(keyNameInC, Convert(keySymbol.TypeInC), $"{iteratorName}.keys[{iteratorName}.i]", ResultType.CString);
 
             continueTargets.Push(symbolTable.NewContinueTarget());
             Visit(context.terminated_statement()[0]);
