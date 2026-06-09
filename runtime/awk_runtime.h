@@ -120,4 +120,12 @@ FILE* awk_output_redirection_write(AwkValue value);
 FILE* awk_output_redirection_append(AwkValue value);
 FILE* awk_output_redirection_pipe(AwkValue value);
 
+AwkValue awk_atan2(AwkValue x, AwkValue y);
+AwkValue awk_cos(AwkValue value);
+AwkValue awk_sin(AwkValue value);
+AwkValue awk_exp(AwkValue value);
+AwkValue awk_log(AwkValue value);
+AwkValue awk_sqrt(AwkValue value);
+AwkValue awk_int(AwkValue value);
+
 #endif

@@ -30,8 +30,6 @@ simple_pattern
 pattern
     : BEGIN
     | END
-    | BEGINFILE
-    | ENDFILE
     | expr
     | expr ',' newline_opt expr
     ;
@@ -105,8 +103,6 @@ print_statement
 simple_print_statement
     : PRINT print_expr_list_opt
     | PRINT LPAREN multiple_expr_list RPAREN
-    | PRINTF print_expr_list
-    | PRINTF LPAREN multiple_expr_list RPAREN
     ;
 
 output_redirection
@@ -173,20 +169,11 @@ expr
     | lvalue DIV_ASSIGN expr
     | lvalue MOD_ASSIGN expr
     | lvalue POW_ASSIGN expr
-    | getline_expr
     | NAME LPAREN expr_list_opt RPAREN
-    | BUILTIN_FUNC_NAME LPAREN expr_list_opt RPAREN
-    | BUILTIN_FUNC_NAME
     | lvalue
     | NUMBER
     | STRING
     | ERE
-    ;
-
-//getline expression variants 
-getline_expr
-    : GETLINE lvalue?
-    | GETLINE lvalue? LT expr
     ;
 
 print_expr_list_opt
@@ -215,8 +202,6 @@ newline_opt
 // keywords
 BEGIN    : 'BEGIN' ;
 END      : 'END' ;
-BEGINFILE : 'BEGINFILE' ;
-ENDFILE   : 'ENDFILE' ;
 BREAK    : 'break' ;
 CONTINUE : 'continue' ;
 DELETE   : 'delete' ;
@@ -230,11 +215,8 @@ IN       : 'in' ;
 NEXT     : 'next' ;
 NEXTFILE : 'nextfile' ;
 PRINT    : 'print' ;
-PRINTF   : 'printf' ;
 RETURN   : 'return' ;
 WHILE    : 'while' ;
-
-GETLINE  : 'getline' ;
 
 // compound operators
 ADD_ASSIGN : '+=' ;
@@ -282,11 +264,8 @@ RBRACE     : '}' ;
 SEMICOLON  : ';' ;
 COMMA      : ',' ;
 
-BUILTIN_FUNC_NAME
-    : 'atan2' | 'cos' | 'sin' | 'exp' | 'log' | 'sqrt' | 'int' | 'rand' | 'srand'
-    | 'gsub' | 'index' | 'length' | 'match' | 'split' | 'sprintf' | 'sub'
-    | 'substr' | 'tolower' | 'toupper' | 'close' | 'fflush' | 'system'
-    ;
+//BUILTIN_FUNC_NAME
+//    : 'atan2' | 'cos' | 'sin' | 'exp' | 'log' | 'sqrt' | 'int' ;
 
 NAME      : [a-zA-Z_][a-zA-Z0-9_]* ;
 

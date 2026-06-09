@@ -933,3 +933,38 @@ void awk_print_values(size_t count, AwkValue* values, FILE* stream, int type)
     if (type == 2)
         pclose(stream);
 }
+
+AwkValue awk_atan2(AwkValue x, AwkValue y)
+{
+    return awk_number(atan2(awk_to_number(x), awk_to_number(y)));
+}
+
+AwkValue awk_cos(AwkValue value)
+{
+    return awk_number(cos(awk_to_number(value)));
+}
+
+AwkValue awk_sin(AwkValue value)
+{
+    return awk_number(sin(awk_to_number(value)));
+}
+
+AwkValue awk_exp(AwkValue value)
+{
+    return awk_number(exp(awk_to_number(value)));
+}
+
+AwkValue awk_log(AwkValue value)
+{
+    return awk_number(log(awk_to_number(value)));
+}
+
+AwkValue awk_sqrt(AwkValue value)
+{
+    return awk_number(sqrt(awk_to_number(value)));
+}
+
+AwkValue awk_int(AwkValue value)
+{
+    return awk_number((int)awk_to_number(value));
+}

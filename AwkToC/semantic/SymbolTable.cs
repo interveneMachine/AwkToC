@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace AwkToC.Semantic;
 
 public class SymbolTable
@@ -56,6 +58,78 @@ public class SymbolTable
             IsPredifined = true,
             TypeInC = CType.CString
         });
+
+        // builtin functions
+        AddWithCName(new Symbol
+        {
+            Name = "atan2",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_atan2"
+        });
+        AddWithCName(new Symbol
+        {
+            Name = "sin",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_sin"
+        });
+        AddWithCName(new Symbol
+        {
+            Name = "cos",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_cos"
+        });
+        AddWithCName(new Symbol
+        {
+            Name = "exp",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_exp"
+        });
+        AddWithCName(new Symbol
+        {
+            Name = "log",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_log"
+        });
+        AddWithCName(new Symbol
+        {
+            Name = "sqrt",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_sqrt"
+        });
+        AddWithCName(new Symbol
+        {
+            Name = "int",
+            Scope = "global",
+            Type = SymbolType.Function,
+            IsPredifined = true,
+            TypeInC = CType.AwkValue,
+            NameInC = "awk_int"
+        });
+    }
+
+    private void AddWithCName(Symbol symbol)
+    {
+        string key = $"{symbol.Scope}:{symbol.Name}";
+        symbols[key] = symbol;
+        UsedCNames.Add(symbol.NameInC ?? throw new Exception("this method requiries nameInC to be provided"));
     }
 
     public void Add(Symbol symbol)
