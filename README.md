@@ -108,6 +108,7 @@ Biblioteka ta zawiera między innymi:
 * przypisania
 * inkrementacja i dekrementacja
 * instrukcja `print`
+* przekierowanie wyjścia `print` (`>` tworzy nowy plik za każdym razem)
 * funkcje użytkownika
 * parametry funkcji
 * instrukcja `return`
@@ -119,6 +120,7 @@ Biblioteka ta zawiera między innymi:
 * instrukcje `break` i `continue`
 * tablice asocjacyjne
 * iteracja po tablicach asocjacyjnych przy pomocy `for (key in array)`
+* usuwanie wybranych lub wszystkich elementów tablic asocjacyjnych
 
 
 ## 5. Przykładowy program
@@ -171,15 +173,12 @@ Poniższa tabela przedstawia najważniejsze tokeny zdefiniowane w gramatyce.
 | Kategoria                 | Token                      | Znaczenie                                                  |
 | ------------------------- | -------------------------- | ---------------------------------------------------------- |
 | Bloki specjalne           | `BEGIN`, `END`             | Bloki wykonywane przed i po przetwarzaniu danych           |
-| Bloki specjalne           | `BEGINFILE`, `ENDFILE`     | Bloki związane z początkiem i końcem przetwarzania pliku   |
 | Instrukcje sterujące      | `IF`, `ELSE`               | Instrukcja warunkowa                                       |
 | Instrukcje sterujące      | `WHILE`, `FOR`, `DO`       | Pętle                                                      |
 | Instrukcje sterujące      | `BREAK`, `CONTINUE`        | Sterowanie przebiegiem pętli                               |
 | Instrukcje sterujące      | `RETURN`, `EXIT`           | Zakończenie funkcji lub programu                           |
 | Funkcje                   | `FUNCTION`                 | Definicja funkcji użytkownika                              |
-| Przetwarzanie rekordów    | `NEXT`, `NEXTFILE`         | Przejście do kolejnego rekordu lub pliku                   |
-| Wejście/wyjście           | `PRINT`, `PRINTF`          | Wypisywanie danych                                         |
-| Wejście/wyjście           | `GETLINE`                  | Pobieranie danych wejściowych                              |
+| Wejście/wyjście           | `PRINT`         | Wypisywanie danych                                         |
 | Tablice                   | `DELETE`                   | Usuwanie elementów tablic asocjacyjnych                    |
 | Tablice                   | `IN`                       | Sprawdzanie istnienia klucza lub iteracja po tablicy       |
 | Literały i identyfikatory | `NAME`                     | Nazwa zmiennej lub funkcji                                 |
@@ -196,15 +195,14 @@ Poniższa tabela przedstawia najważniejsze tokeny zdefiniowane w gramatyce.
 | Przypisania               | `MUL_ASSIGN`, `DIV_ASSIGN` | Przypisanie z mnożeniem lub dzieleniem                     |
 | Przypisania               | `MOD_ASSIGN`, `POW_ASSIGN` | Przypisanie z modulo lub potęgowaniem                      |
 | Operatory specjalne       | `INCR`, `DECR`             | Inkrementacja i dekrementacja                              |
-| Operatory specjalne       | `MATCH`, `NO_MATCH`        | Dopasowanie lub brak dopasowania do wyrażenia regularnego  |
-| Operatory specjalne       | `QUESTION`, `COLON`        | Operator warunkowy                                         |
+| Operatory specjalne       | `MATCH`, `NO_MATCH`        | Dopasowanie lub brak dopasowania do wyrażenia regularnego  |                                    |
 | Operatory specjalne       | `DOLLAR`                   | Odwołanie do pola rekordu, np. `$1`                        |
 | Operatory specjalne       | `PIPE`, `APPEND`           | Przekierowanie wyjścia                                     |
 | Separatory                | `LPAREN`, `RPAREN`         | Nawiasy okrągłe                                            |
 | Separatory                | `LBRACKET`, `RBRACKET`     | Nawiasy kwadratowe                                         |
 | Separatory                | `LBRACE`, `RBRACE`         | Nawiasy klamrowe                                           |
 | Separatory                | `COMMA`, `SEMICOLON`       | Przecinek i średnik                                        |
-| Funkcje wbudowane         | `BUILTIN_FUNC_NAME`        | Nazwy funkcji wbudowanych, np. `length`, `split`, `substr` |
+| Funkcje wbudowane         | `BUILTIN_FUNC_NAME`        | Nazwy funkcji wbudowanych, np. `sin`, `log` |
 | Inne                      | `NEWLINE`                  | Znak nowej linii                                           |
 | Inne                      | `COMMENT`                  | Komentarz zaczynający się od `#`                           |
 | Inne                      | `WS`                       | Białe znaki pomijane przez lexer                           |
@@ -247,8 +245,6 @@ simple_pattern
 pattern
     : BEGIN
     | END
-    | BEGINFILE
-    | ENDFILE
     | expr
     | expr ',' newline_opt expr
     ;
@@ -315,15 +311,13 @@ simple_statement
     ;
 
 print_statement
-    : simple_print_statement
-    | simple_print_statement output_redirection
+    : simple_print_statement output_redirection
+    | simple_print_statement
     ;
 
 simple_print_statement
     : PRINT print_expr_list_opt
     | PRINT LPAREN multiple_expr_list RPAREN
-    | PRINTF print_expr_list
-    | PRINTF LPAREN multiple_expr_list RPAREN
     ;
 
 output_redirection
@@ -379,7 +373,7 @@ expr
     | expr MATCH ERE
     | expr NO_MATCH ERE
     | expr IN NAME
-    | LPAREN multiple_expr_list RPAREN IN NAME //TODO
+    | LPAREN multiple_expr_list RPAREN IN NAME
     | expr AND newline_opt expr
     | expr OR newline_opt expr
     | expr QUESTION newline_opt expr COLON newline_opt expr
@@ -390,20 +384,11 @@ expr
     | lvalue DIV_ASSIGN expr
     | lvalue MOD_ASSIGN expr
     | lvalue POW_ASSIGN expr
-    | getline_expr
     | NAME LPAREN expr_list_opt RPAREN
-    | BUILTIN_FUNC_NAME LPAREN expr_list_opt RPAREN
-    | BUILTIN_FUNC_NAME
     | lvalue
     | NUMBER
     | STRING
     | ERE
-    ;
-
-//getline expression variants 
-getline_expr
-    : GETLINE lvalue?
-    | GETLINE lvalue? LT expr
     ;
 
 print_expr_list_opt
@@ -432,8 +417,6 @@ newline_opt
 // keywords
 BEGIN    : 'BEGIN' ;
 END      : 'END' ;
-BEGINFILE : 'BEGINFILE' ;
-ENDFILE   : 'ENDFILE' ;
 BREAK    : 'break' ;
 CONTINUE : 'continue' ;
 DELETE   : 'delete' ;
@@ -447,11 +430,8 @@ IN       : 'in' ;
 NEXT     : 'next' ;
 NEXTFILE : 'nextfile' ;
 PRINT    : 'print' ;
-PRINTF   : 'printf' ;
 RETURN   : 'return' ;
 WHILE    : 'while' ;
-
-GETLINE  : 'getline' ;
 
 // compound operators
 ADD_ASSIGN : '+=' ;
@@ -498,12 +478,6 @@ LBRACE     : '{' ;
 RBRACE     : '}' ;
 SEMICOLON  : ';' ;
 COMMA      : ',' ;
-
-BUILTIN_FUNC_NAME
-    : 'atan2' | 'cos' | 'sin' | 'exp' | 'log' | 'sqrt' | 'int' | 'rand' | 'srand'
-    | 'gsub' | 'index' | 'length' | 'match' | 'split' | 'sprintf' | 'sub'
-    | 'substr' | 'tolower' | 'toupper' | 'close' | 'fflush' | 'system'
-    ;
 
 NAME      : [a-zA-Z_][a-zA-Z0-9_]* ;
 
