@@ -158,7 +158,7 @@ expr
     | expr MATCH ERE
     | expr NO_MATCH ERE
     | expr IN NAME
-    | LPAREN multiple_expr_list RPAREN IN NAME //TODO
+    | LPAREN multiple_expr_list RPAREN IN NAME
     | expr AND newline_opt expr
     | expr OR newline_opt expr
     | expr QUESTION newline_opt expr COLON newline_opt expr
@@ -263,9 +263,6 @@ LBRACE     : '{' ;
 RBRACE     : '}' ;
 SEMICOLON  : ';' ;
 COMMA      : ',' ;
-
-//BUILTIN_FUNC_NAME
-//    : 'atan2' | 'cos' | 'sin' | 'exp' | 'log' | 'sqrt' | 'int' ;
 
 NAME      : [a-zA-Z_][a-zA-Z0-9_]* ;
 

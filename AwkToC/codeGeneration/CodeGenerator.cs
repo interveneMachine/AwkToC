@@ -1060,6 +1060,69 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             );
         }
         if (
+            context.multiple_expr_list() != null &&
+            context.LPAREN() != null &&
+            context.RPAREN() != null &&
+            context.IN() != null
+        )
+        {
+            string text = context.NAME().GetText();
+            Symbol array = symbolTable.Lookup(text, awkScope)
+                ?? throw new MissingFromSymbolTableException(text, context);
+            string nameInC = array.NameInC
+                ?? throw new MissingNameInCException(array, context);
+            if (!array.IsArray)
+                throw new WrongTypeException(array, "array", context);
+            List<AwkParser.ExprContext> exprContexts = new();
+            CollectMultipleExprList(
+                context.multiple_expr_list(),
+                exprContexts
+            );
+            List<string> exprNames = [];
+            foreach (var exprContext in exprContexts)
+            {
+                var exprResult = Visit(exprContext);
+                exprNames.Add(RequireReturnName(exprResult, "array argument expr"));
+            }
+            string argumentName = symbolTable.NewTemporaryCName(cScope, false);
+            stream.WriteLine($"AwkValue {argumentName}[] = {{ {string.Join(", ", exprNames)} }};");
+            var concatenatedArgumentResult = EmitTemporary(
+                $"awk_concat_array_arg({exprNames.Count}, {argumentName})",
+                true
+            );
+            string concatenatedArgumentName = RequireReturnName(
+                concatenatedArgumentResult,
+                "concatenation of array arguments"
+            );
+            return new NodeCompilationResult(
+                $"array_exists({nameInC}, {concatenatedArgumentName})",
+                ResultType.General
+            );
+        }
+
+        if(
+            context.IN() != null &&
+            context.NAME() != null
+        )
+        {
+            string text = context.NAME().GetText();
+            Symbol array = symbolTable.Lookup(text, awkScope)
+                ?? throw new MissingFromSymbolTableException(text, context);
+            string nameInC = array.NameInC
+                ?? throw new MissingNameInCException(array, context);
+            if (!array.IsArray)
+                throw new WrongTypeException(array, "array", context);
+            
+            var argumentResult = Visit(context.expr()[0]);
+            string argumentName = RequireReturnName(argumentResult, "expr");
+
+            return new NodeCompilationResult(
+                $"array_exists({nameInC}, {argumentName})",
+                ResultType.General
+            );
+        }
+
+        if (
             context.NAME() != null &&
             context.LPAREN() != null &&
             context.RPAREN() != null

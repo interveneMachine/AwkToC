@@ -100,6 +100,25 @@ AwkValue array_get_value(Array *array, AwkValue key)
     return awk_undefined();
 }
 
+AwkValue array_exists(Array *array, AwkValue key)
+{
+    char* string_key = awk_to_string(key);
+    unsigned long hash_key = djb2(string_key) % array->capacity;
+    ArrayEntry* entry = array->entries[hash_key];
+
+    while (entry != NULL)
+    {
+        if (strcmp(entry->key, string_key) == 0)
+        {
+            free(string_key);
+            return awk_bool(1);
+        }
+        entry = entry->next;
+    }
+    free(string_key);
+    return awk_bool(0);
+}
+
 void array_set_value(Array *array, AwkValue key, AwkValue value)
 {
     char* string_key = awk_to_string(key);

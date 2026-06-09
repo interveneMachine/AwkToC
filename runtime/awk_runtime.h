@@ -53,6 +53,7 @@ typedef struct
 
 Array* array_init();
 AwkValue array_get_value(Array* array, AwkValue key);
+AwkValue array_exists(Array* array, AwkValue key);
 void array_set_value(Array* array, AwkValue key, AwkValue value);
 void array_delete_value(Array* array, AwkValue key);
 void array_delete(Array* array);
