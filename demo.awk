@@ -27,10 +27,7 @@ END {
     print "=== PODSUMOWANIE DZIALOW ==="
 
     for (department in departmentTotals) {
-        avg = average(
-            departmentTotals[department],
-            departmentCounts[department]
-        )
+        avg = average(departmentTotals[department],departmentCounts[department])
 
         print department,
               "suma:", departmentTotals[department],
