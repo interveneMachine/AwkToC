@@ -1,5 +1,6 @@
 using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
+using AwkToC.Exceptions;
 
 namespace AwkToC.CodeGeneration;
 
@@ -220,7 +221,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         foreach (var variable in symbolTable.AllVariables())
         {
             string name = variable.NameInC
-                ?? throw new Exception($"variable {variable.Name} in global has NameInC=null");
+                ?? throw new MissingNameInCException(variable, context);
             if (variable.IsArray)
                 stream.WriteLine($"Array* {name};");
             else
@@ -261,7 +262,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         symbolTable.AllVariables()
             .Where(s => s.IsArray)
             .Select(s => s.NameInC
-                ?? throw new Exception($"variable {s.Name} in global has NameInC=null"))
+                ?? throw new MissingNameInCException(s, context))
             .ToList()
             .ForEach(name => stream.WriteLine($"{name} = array_init();"));
         stream.WriteLine("awk_set_default_predefined();");
@@ -345,9 +346,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             string name = context.NAME().GetText();
             Symbol function = symbolTable.Lookup(name, awkScope)
-                ?? throw new ArgumentException($"function {name} is missing from symbolTable");
+                ?? throw new MissingFromSymbolTableException(name, context);
             string functionName = function.NameInC
-                ?? throw new Exception($"function {name} has NameInC=null");
+                ?? throw new MissingNameInCException(function, context);
             awkScope.EnterFunction(name);
             cScope.EnterFunction(name);
 
@@ -357,9 +358,9 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 foreach(var parameter in context.param_list_opt().param_list().NAME())
                 {
                     Symbol parameterSymbol = symbolTable.Lookup(parameter.GetText(), awkScope)
-                        ?? throw new Exception($"symbolTable is missing symbol for {parameter.GetText()} in {awkScope.GetScope()}");
+                        ?? throw new MissingFromSymbolTableException(parameter.GetText(), context);
                     if(parameterSymbol.NameInC == null)
-                        throw new Exception($"symbol with name: {parameterSymbol.Name} scope: {awkScope.GetScope()} is missing NameInC");
+                        throw new MissingNameInCException(parameterSymbol, context);
                     parameters.Add($"AwkValue {parameterSymbol.NameInC}");
                 }
             string parameterNames = string.Join(", ", parameters);
@@ -400,7 +401,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             string itemNameSimplePattern = symbolTable.NewItemCName();
             NodeCompilationResult simplePatternResult = Visit(context.simple_pattern());
-            string simplePatternName = RequireReturnName(simplePatternResult, "item -> simple_pattern");
+            string simplePatternName = RequireReturnName(simplePatternResult, "simple_pattern");
 
             stream.WriteLine($"void {itemNameSimplePattern}()");
             stream.EnterBlock();
@@ -420,7 +421,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 ResultType.ItemFunction
             );
         }
-        throw new Exception("unrecognised item rule");
+        throw new InvalidRuleException("item", context);
     }
 
     public override NodeCompilationResult VisitPattern([NotNull] AwkParser.PatternContext context)
@@ -445,6 +446,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         // expr ',' newline_opt expr
         else if (context.COMMA() is not null)
         {
+            // TODO
             throw new NotSupportedException(
                 "expr ',' newline_opt expr nie jest obsługiwane"
             );
@@ -500,7 +502,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 ResultType.File
             );
         }
-        throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Unrecognised rule for `output_redirection` text: {context.GetText()}");
+        throw new InvalidRuleException("output_redirection", context);
     }
 
     public override NodeCompilationResult VisitPrint_statement([NotNull] AwkParser.Print_statementContext context)
@@ -516,6 +518,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         if (simple_print_statement.PRINT() == null)
         {
+            // TODO
             throw new NotSupportedException(
                 "obsługiwane jest tylko 'print', bez 'printf'."
             );
@@ -526,9 +529,13 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
         if (expressionList == null)
         {
-            throw new NotSupportedException(
-                "'print' bez argumentów nie jest jeszcze obsługiwany."
+            var fieldResult = EmitTemporary(
+                $"fields_get(fields, 0)",
+                true
             );
+            string fieldName = RequireReturnName(fieldResult, "fields_get");
+            stream.WriteLine($"awk_print_value({fieldName}, {cstream});");
+            return new NodeCompilationResult();
         }
 
         List<AwkParser.ExprContext> expressions =
@@ -652,21 +659,19 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             string text = context.NAME()[1].GetText();
             Symbol arraySymbol = symbolTable.Lookup(text, awkScope)
-                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Missing array {text} from symbol table");
+                ?? throw new MissingFromSymbolTableException(text, context);
             string arrayNameInC = arraySymbol.NameInC
-                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Array {text} is missing NameInC parameter");
+                ?? throw new MissingNameInCException(arraySymbol, context);
             if (!arraySymbol.IsArray)
-                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Symbol {text} is used in array context");
+                throw new WrongTypeException(arraySymbol, "array", context);
             
             text = context.NAME()[0].GetText();
             Symbol keySymbol = symbolTable.Lookup(text, awkScope)
-                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Missing variable {text} from symbol table");
+                ?? throw new MissingFromSymbolTableException(text, context);
             string keyNameInC = keySymbol.NameInC
-                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Variable {text} is missing NameInC parameter");
-            if (keySymbol.Type != SymbolType.Variable)
-                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Symbol {text} is {keySymbol.Type}, expected Variable");
-            if (keySymbol.IsArray)
-                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Array {text} is used in variable context");
+                ?? throw new MissingNameInCException(keySymbol, context);
+            if (keySymbol.Type != SymbolType.Variable || keySymbol.IsArray)
+                throw new WrongTypeException(keySymbol, "variable", context);
 
             string iteratorName = symbolTable.NewTemporaryCName(cScope, false);
             stream.WriteLine($"ArrayIterator {iteratorName} = arrayiterator_init({arrayNameInC});");
@@ -754,7 +759,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (context.SEMICOLON() != null)
             return new NodeCompilationResult();
         
-        throw new Exception("unrecognised terminated_statement rule");
+        throw new InvalidRuleException("terminated_statement", context);
     }
 
     public override NodeCompilationResult VisitTerminatable_statement(
@@ -785,11 +790,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         if (context.RETURN() != null)
         {
             if (!awkScope.InFunction())
-            {
-                throw new ArgumentException(
-                    "'return' can be used only inside a function."
-                );
-            }
+                throw new CompilationException("return used outside function context", context);
 
             AwkParser.ExprContext? returnExpression =
                 context.expr();
@@ -863,7 +864,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             return new NodeCompilationResult();
         }
 
-        throw new Exception("unrecognised rule");
+        throw new InvalidRuleException("terminatable_statement", context);
     }
 
     private List<AwkParser.ExprContext> CollectFunctionArguments(
@@ -925,11 +926,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             var expressions = context.expr();
 
             if (expressions.Length != 1)
-            {
-                throw new InvalidOperationException(
-                    "Unexpected function argument list structure."
-                );
-            }
+                throw new InvalidRuleException("multiple_expr_list", context);
 
             arguments.Add(expressions[0]);
             return;
@@ -974,22 +971,13 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             Symbol functionSymbol =
                 symbolTable.Lookup(functionName, awkScope)
-                ?? throw new ArgumentException(
-                    $"Function '{functionName}' is not defined."
-                );
+                ?? throw new MissingFromSymbolTableException(functionName, context);
 
             if (functionSymbol.Type != SymbolType.Function)
-            {
-                throw new ArgumentException(
-                    $"Symbol '{functionName}' is not a function."
-                );
-            }
+                throw new WrongTypeException(functionSymbol, "function", context);
 
-            string functionNameInC =
-                functionSymbol.NameInC
-                ?? throw new Exception(
-                    $"Function '{functionName}' has NameInC=null."
-                );
+            string functionNameInC = functionSymbol.NameInC
+                ?? throw new MissingNameInCException(functionSymbol, context);
 
             List<AwkParser.ExprContext> arguments =
                 CollectFunctionArguments(context.expr_list_opt());
@@ -1082,7 +1070,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                         $"awk_number((double)--{lvalueName})",
                         false
                     );
-                throw new Exception("unknown rule");
+                throw new InvalidRuleException("expr", context);
             }
             
             NodeCompilationResult result = EmitLvalue(
@@ -1094,7 +1082,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             
             if (context.GetChild(1).GetText() == "++")
             {
-                AssignToLValue(lvalueName, lvalue.Type, $"awk_add({resultName}, awk_number(1))", ResultType.General);
+                AssignToLValue(
+                    lvalueName,
+                    lvalue.Type,
+                    $"awk_add({resultName}, awk_number(1))",
+                    ResultType.General
+                );
                 return new NodeCompilationResult(
                     resultName,
                     ResultType.General
@@ -1103,7 +1096,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             if (context.GetChild(1).GetText() == "--")
             {
-                AssignToLValue(lvalueName, lvalue.Type, $"awk_sub({resultName}, awk_number(1))", ResultType.General);
+                AssignToLValue(
+                    lvalueName,
+                    lvalue.Type,
+                    $"awk_sub({resultName}, awk_number(1))",
+                    ResultType.General
+                );
                 return new NodeCompilationResult(
                     resultName,
                     ResultType.General
@@ -1112,7 +1110,12 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             if (context.GetChild(0).GetText() == "++")
             {
-                AssignToLValue(lvalueName, lvalue.Type, $"awk_add({resultName}, awk_number(1))", ResultType.General);
+                AssignToLValue(
+                    lvalueName,
+                    lvalue.Type,
+                    $"awk_add({resultName}, awk_number(1))",
+                    ResultType.General
+                );
                 return EmitLvalue(
                     lvalueName,
                     ResultType.General
@@ -1121,14 +1124,19 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
 
             if (context.GetChild(0).GetText() == "--")
             {
-                AssignToLValue(lvalueName, lvalue.Type, $"awk_sub({resultName}, awk_number(1))", ResultType.General);
+                AssignToLValue(
+                    lvalueName,
+                    lvalue.Type,
+                    $"awk_sub({resultName}, awk_number(1))",
+                    ResultType.General
+                );
                 return EmitLvalue(
                     lvalueName,
                     ResultType.General
                 );
             }
 
-            throw new Exception("unknown rule");
+            throw new InvalidRuleException("expr", context);
         }
         if (
             context.LPAREN() != null &&
@@ -1284,12 +1292,17 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
                 else if (context.DIV_ASSIGN() != null) operationSymbol = "awk_div";
                 else if (context.MOD_ASSIGN() != null) operationSymbol = "awk_mod";
                 else if (context.POW_ASSIGN() != null) operationSymbol = "awk_pow";
-                else throw new Exception("unable to match expr rule");
+                else throw new InvalidRuleException("expr", context);
 
                 var generalLvalueResult = EmitLvalue(lvalueName, lvalue.Type);
                 string generalLvalueName = RequireReturnName(generalLvalueResult, "emit tmp lvalue");
 
-                AssignToLValue(lvalueName, lvalue.Type, $"{operationSymbol}({generalLvalueName}, {valueName})", ResultType.General);
+                AssignToLValue(
+                    lvalueName,
+                    lvalue.Type,
+                    $"{operationSymbol}({generalLvalueName}, {valueName})",
+                    ResultType.General
+                );
 
                 return EmitLvalue(lvalueName, lvalue.Type);
             }
@@ -1433,9 +1446,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             );
         }
 
-        throw new NotSupportedException(
-            $"To wyrażenie nie jest jeszcze obsługiwane: {context.GetText()}"
-        );
+        throw new InvalidRuleException("expr", context);
     }
 
     public override NodeCompilationResult VisitLvalue(
@@ -1447,11 +1458,11 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             string name = context.NAME().GetText();
             Symbol symbol = symbolTable.Lookup(name, awkScope)
-                ?? throw new Exception($"missing symbol with name: {name}");
+                ?? throw new MissingFromSymbolTableException(name, context);
             if (symbol.NameInC is null)
-                throw new Exception($"missing NameInC for symbol with name: {name}");
+                throw new MissingNameInCException(symbol, context);
             if (symbol.Type != SymbolType.Variable && symbol.Type != SymbolType.Parameter)
-                throw new Exception($"lvalue can't be of type: {symbol.Type}. Symbol with name: {name}"); // TODO improve error
+                throw new WrongTypeException(symbol, "one of function, variable, parameter, array", context);
             var type = symbol.TypeInC switch
             {
                 CType.Int => ResultType.Int,
@@ -1482,11 +1493,11 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         {
             string text = context.NAME().GetText();
             Symbol array = symbolTable.Lookup(text, awkScope)
-                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Missing array {text} from symbol table");
+                ?? throw new MissingFromSymbolTableException(text, context);
             string nameInC = array.NameInC
-                ?? throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Array {text} is missing NameInC parameter");
+                ?? throw new MissingNameInCException(array, context);
             if (!array.IsArray)
-                throw new Exception($"[{context.Start.Line}:{context.Start.Column}] Symbol {text} is used in array context");
+                throw new WrongTypeException(array, "array", context);
 
             List<AwkParser.ExprContext> exprContexts = CollectListArguments(context.expr_list());
             List<string> exprNames = [];
@@ -1511,7 +1522,7 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             );
         }
 
-        throw new Exception("unknown lvalue rule");
+        throw new InvalidRuleException("lvalue", context);
     }
 
     public void Close()
