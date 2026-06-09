@@ -137,56 +137,73 @@ void array_set_value(Array *array, AwkValue key, AwkValue value)
 
 void array_delete_value(Array *array, AwkValue key)
 {
+    if (array == NULL)
+        return;
+
     char* string_key = awk_to_string(key);
     unsigned long hash_key = djb2(string_key) % array->capacity;
-    ArrayEntry dummy;
-    dummy.next = array->entries[hash_key];
-    ArrayEntry* previous = &dummy;
-    ArrayEntry* current = previous->next;
+
+    ArrayEntry* previous = NULL;
+    ArrayEntry* current = array->entries[hash_key];
+
     while (current != NULL)
     {
         if (strcmp(current->key, string_key) == 0)
         {
+            if (previous == NULL)
+                array->entries[hash_key] = current->next;
+            else
+                previous->next = current->next;
+
             awk_free(&current->value);
             free(current->key);
-            current = current->next;
-            free(previous->next);
-            previous->next = current;
+            free(current);
+            array->size--;
+
             free(string_key);
             return;
         }
+
         previous = current;
         current = current->next;
     }
+
     free(string_key);
 }
 
 void array_delete(Array *array)
 {
-    ArrayEntry *entry, *tmp;
-    int i = 0;
-    while(i < array->capacity)
+    if (array == NULL)
+        return;
+
+    for (size_t i = 0; i < array->capacity; i++)
     {
-        entry = array->entries[i];
-        if (entry == NULL)
+        ArrayEntry* entry = array->entries[i];
+
+        while (entry != NULL)
         {
-            i++;
-            continue;
+            ArrayEntry* next = entry->next;
+
+            awk_free(&entry->value);
+            free(entry->key);
+            free(entry);
+
+            entry = next;
         }
-        tmp = entry;
-        entry = entry->next;
-        awk_free(&tmp->value);
-        free(tmp->key);
-        free(tmp);
-        array->size--;
+
+        array->entries[i] = NULL;
     }
+
+    array->size = 0;
 }
 
 void array_free(Array *array)
 {
     if (array == NULL)
         return;
+
     array_delete(array);
+    free(array->entries);
     free(array);
 }
 

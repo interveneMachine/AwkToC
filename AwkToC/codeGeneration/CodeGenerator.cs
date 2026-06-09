@@ -294,8 +294,13 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
 
         if (end is not null) stream.WriteLine($"{end}();");
-
         if (itemsResults.Count != 0) stream.WriteLine("fclose(file);");
+        symbolTable.AllVariables()
+            .Where(symbol => symbol.IsArray)
+            .Select(symbol => symbol.NameInC
+                              ?? throw new MissingNameInCException(symbol, context))
+            .ToList()
+            .ForEach(name => stream.WriteLine($"array_free({name});"));
         stream.WriteLine("return 0;");
         stream.ExitBlock();
 
@@ -767,6 +772,87 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         
         throw new InvalidRuleException("terminated_statement", context);
     }
+    public override NodeCompilationResult VisitSimple_statement(
+    AwkParser.Simple_statementContext context
+)
+{
+    /*
+     * delete arr[key]
+     * delete arr
+     */
+    if (context.DELETE() != null)
+    {
+        string arrayName = context.NAME().GetText();
+
+        Symbol arraySymbol = symbolTable.Lookup(arrayName, awkScope)
+            ?? throw new MissingFromSymbolTableException(arrayName, context);
+
+        string arrayNameInC = arraySymbol.NameInC
+            ?? throw new MissingNameInCException(arraySymbol, context);
+
+        if (!arraySymbol.IsArray)
+        {
+            throw new WrongTypeException(arraySymbol, "array", context);
+        }
+
+        /*
+         * delete arr[key]
+         */
+        if (context.LBRACKET() != null)
+        {
+            var exprList = context.expr_list()
+                ?? throw new InvalidRuleException("simple_statement", context);
+
+            List<AwkParser.ExprContext> keyExpressions =
+                CollectListArguments(exprList);
+
+            List<string> keyExpressionNames = new();
+
+            foreach (var keyExpression in keyExpressions)
+            {
+                NodeCompilationResult keyResult = Visit(keyExpression);
+
+                keyExpressionNames.Add(
+                    RequireReturnName(keyResult, "array key expression")
+                );
+            }
+
+            string keyArrayName =
+                symbolTable.NewTemporaryCName(cScope, false);
+
+            stream.WriteLine(
+                $"AwkValue {keyArrayName}[] = {{ {string.Join(", ", keyExpressionNames)} }};"
+            );
+
+            NodeCompilationResult concatenatedKeyResult =
+                EmitTemporary(
+                    $"awk_concat_array_arg({keyExpressionNames.Count}, {keyArrayName})",
+                    true
+                );
+
+            string concatenatedKeyName =
+                RequireReturnName(
+                    concatenatedKeyResult,
+                    "concatenated array key"
+                );
+
+            stream.WriteLine(
+                $"array_delete_value({arrayNameInC}, {concatenatedKeyName});"
+            );
+
+            return new NodeCompilationResult();
+        }
+
+        /*
+         * delete arr
+         */
+        stream.WriteLine($"array_delete({arrayNameInC});");
+
+        return new NodeCompilationResult();
+    }
+
+    return VisitChildren(context);
+}
 
     public override NodeCompilationResult VisitTerminatable_statement(
         AwkParser.Terminatable_statementContext context
