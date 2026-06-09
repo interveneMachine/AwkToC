@@ -73,6 +73,37 @@ public class SymbolTableBuilder : AwkBaseVisitor<object?>
 
         return VisitChildren(context);
     }
+
+    public override object? VisitUnterminated_statement(
+        [NotNull] AwkParser.Unterminated_statementContext context
+    )
+    {
+        if (context.IN() != null)
+        {
+            string name = context.NAME()[0].GetText();
+
+            var symbol = table.Lookup(name, awkScope);
+            bool isArray = false;
+
+            if (symbol != null)
+            {
+                ValidateArrayUsage(symbol, isArray, context.Start.Line, context.Start.Column);
+                return VisitChildren(context);
+            }
+
+            table.Add(new Symbol
+            {
+                Name = name,
+                Type = SymbolType.Variable,
+                Scope = awkScope.GetGlobal(),
+                Line = context.Start.Line,
+                Column = context.Start.Column,
+                IsArray = isArray
+            });
+        }
+
+        return VisitChildren(context);
+    }
    
     public override object? VisitTerminatable_statement(
         [NotNull] AwkParser.Terminatable_statementContext context

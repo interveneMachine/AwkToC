@@ -778,6 +778,179 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         
         throw new InvalidRuleException("terminated_statement", context);
     }
+
+    public override NodeCompilationResult VisitUnterminated_statement([NotNull] AwkParser.Unterminated_statementContext context)
+    {
+        // IF LPAREN expr RPAREN newline_opt terminated_statement ELSE newline_opt unterminated_statement
+        if (context.IF() != null && context.ELSE() != null)
+        {
+            NodeCompilationResult conditionResults = Visit(context.expr());
+            string conditionName = RequireReturnName(conditionResults, "expr");
+            stream.WriteLine($"if(awk_is_truthy({conditionName}))");
+            stream.EnterBlock();
+            cScope.EnterIf(context.Start.Line, context.Start.Column);
+
+            Visit(context.terminated_statement());
+
+            FreeTmpVariables();
+            cScope.ExitIf();
+            stream.ExitBlock();
+
+            // ELSE newline_opt unterminated_statement
+            if (context.ELSE() != null)
+            {
+                stream.WriteLine("else");
+                stream.EnterBlock();
+                cScope.EnterElse(context.Start.Line, context.Start.Column);
+
+                Visit(context.unterminated_statement());
+
+                FreeTmpVariables();
+                cScope.ExitElse();
+                stream.ExitBlock();
+            }
+            return new NodeCompilationResult();
+        }
+
+        // FOR LPAREN NAME IN NAME RPAREN newline_opt terminated_statement
+        if (context.IN() != null)
+        {
+            string text = context.NAME()[1].GetText();
+            Symbol arraySymbol = symbolTable.Lookup(text, awkScope)
+                ?? throw new MissingFromSymbolTableException(text, context);
+            string arrayNameInC = arraySymbol.NameInC
+                ?? throw new MissingNameInCException(arraySymbol, context);
+            if (!arraySymbol.IsArray)
+                throw new WrongTypeException(arraySymbol, "array", context);
+            
+            text = context.NAME()[0].GetText();
+            Symbol keySymbol = symbolTable.Lookup(text, awkScope)
+                ?? throw new MissingFromSymbolTableException(text, context);
+            string keyNameInC = keySymbol.NameInC
+                ?? throw new MissingNameInCException(keySymbol, context);
+            if (keySymbol.Type != SymbolType.Variable || keySymbol.IsArray)
+                throw new WrongTypeException(keySymbol, "variable", context);
+
+            string iteratorName = symbolTable.NewTemporaryCName(cScope, true, true);
+            stream.WriteLine($"ArrayIterator {iteratorName} = arrayiterator_init({arrayNameInC});");
+            
+            stream.WriteLine("while(1)");
+            stream.EnterBlock(); cScope.EnterWhile(context.Start.Line, context.Start.Column);
+
+            stream.WriteLine($"if(arrayiterator_is_end(&{iteratorName}))");
+            stream.EnterBlock();
+            FreeTmpVariablesIn("while");
+            stream.WriteLine("break;");
+            stream.ExitBlock();
+
+            AssignToLValue(keyNameInC, Convert(keySymbol.TypeInC), $"{iteratorName}.keys[{iteratorName}.i]", ResultType.CString);
+
+            continueTargets.Push(symbolTable.NewContinueTarget());
+            Visit(context.unterminated_statement());
+
+            FreeTmpVariables();
+
+            // incr instruction in for loop, continue jumps to this label with goto
+            stream.WriteLine($"{continueTargets.Peek()}:");
+            stream.WriteLine($"arrayiterator_next(&{iteratorName});");
+
+            stream.ExitBlock(); cScope.ExitWhile();
+            continueTargets.Pop();
+            return new NodeCompilationResult();
+        }
+
+        // IF LPAREN expr RPAREN newline_opt unterminated_statement
+        if (context.IF() != null)
+        {
+            NodeCompilationResult conditionResults = Visit(context.expr());
+            string conditionName = RequireReturnName(conditionResults, "expr");
+            stream.WriteLine($"if(awk_is_truthy({conditionName}))");
+            stream.EnterBlock();
+            cScope.EnterIf(context.Start.Line, context.Start.Column);
+
+            Visit(context.unterminated_statement());
+
+            FreeTmpVariables();
+            cScope.ExitIf();
+            stream.ExitBlock();
+            return new NodeCompilationResult();
+        }
+
+        // WHILE LPAREN expr RPAREN newline_opt terminated_statement
+        if (context.WHILE() != null)
+        {
+            stream.WriteLine("while(1)");
+            stream.EnterBlock();
+            cScope.EnterWhile(context.Start.Line, context.Start.Column);
+
+            cScope.EnterCondition(context.Start.Line, context.Start.Column);
+            NodeCompilationResult exprResult = Visit(context.expr());
+            string exprName = RequireReturnName(exprResult, "expr");
+            stream.WriteLine($"if(!awk_is_truthy({exprName}))");
+            stream.EnterBlock();
+            FreeTmpVariablesIn("while");
+            stream.WriteLine("break;");
+            stream.ExitBlock();
+
+            continueTargets.Push(null);
+            Visit(context.unterminated_statement());
+
+            FreeTmpVariables();
+            cScope.ExitWhile();
+            stream.ExitBlock();
+            continueTargets.Pop();
+            return new NodeCompilationResult();
+        }
+
+        // FOR LPAREN simple_statement? SEMICOLON expr? SEMICOLON simple_statement? RPAREN newline_opt unterminated_statement
+        if (context.FOR() != null &&
+            context.simple_statement() != null)
+        {
+            if (context.simple_statement()[0] != null)
+                Visit(context.simple_statement()[0]);
+            stream.WriteLine("while(1)");
+            stream.EnterBlock();
+            cScope.EnterWhile(context.Start.Line, context.Start.Column);
+
+            if (context.expr() != null)
+            {
+                NodeCompilationResult exprResult = Visit(context.expr());
+                string exprName = RequireReturnName(exprResult, "expr");
+                stream.WriteLine($"if(!awk_is_truthy({exprName}))");
+                stream.EnterBlock();
+                FreeTmpVariablesIn("while");
+                stream.WriteLine("break;");
+                stream.ExitBlock();
+            }
+            continueTargets.Push(symbolTable.NewContinueTarget());
+            Visit(context.unterminated_statement());
+            
+            FreeTmpVariables();
+
+            if (context.simple_statement()[1] != null)
+            {
+                // incr instruction in for loop, continue jumps to this label with goto
+                stream.WriteLine($"{continueTargets.Peek()}:");
+                Visit(context.simple_statement()[1]);
+                FreeTmpVariables();
+            }
+
+            continueTargets.Pop();
+            stream.ExitBlock();
+            cScope.ExitWhile();
+            return new NodeCompilationResult();
+        }
+        
+        // terminatable_statement
+        if (context.terminatable_statement() != null)
+        {
+            Visit(context.terminatable_statement());
+            return new NodeCompilationResult();
+        }
+
+        throw new InvalidRuleException("unterminated_statement", context);
+    }
+
     public override NodeCompilationResult VisitSimple_statement(
     AwkParser.Simple_statementContext context
 )
