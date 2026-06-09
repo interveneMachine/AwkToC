@@ -533,14 +533,6 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
         }
         else cstream = "stdout, 0";
 
-        if (simple_print_statement.PRINT() == null)
-        {
-            // TODO
-            throw new NotSupportedException(
-                "obsługiwane jest tylko 'print', bez 'printf'."
-            );
-        }
-
         var expressionList =
             simple_print_statement.print_expr_list_opt()?.print_expr_list();
 

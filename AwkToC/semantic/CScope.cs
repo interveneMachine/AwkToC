@@ -21,7 +21,7 @@ public class CScope
 
     public void ExitIf()
     {
-        scopes.Pop(); // TODO improve error handling
+        scopes.Pop();
     }
 
     public void EnterElse(int line, int column)
