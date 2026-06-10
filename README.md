@@ -124,47 +124,80 @@ Biblioteka ta zawiera między innymi:
 
 
 ## 5. Przykładowy program
-
-Poniższy program zlicza wystąpienia osób z działu `IT` oraz sumuje ich wartości z drugiej kolumny.
-
+Poniższy przykład analizuje dane pracowników. Program wykorzystuje funkcje użytkownika, pola rekordów, instrukcje `BEGIN` i `END`, tablice asocjacyjne z kluczami wieloelementowymi, pętle, warunki oraz obie obsługiwane postacie instrukcji `delete`.
 ### Dane wejściowe
-
+Plik `employees.txt`:
 ```text
-Jan 9000 IT
-Anna 12000 HR
-Piotr 15000 IT
-Jan 11000 IT
+Jan IT 9000
+Anna HR 12000
+Piotr IT 15000
+Jan IT 11000
+Ola HR 10000
+Adam IT 7000
+Ewa SALES 14000
+Tomasz SALES 8000
 ```
-
+Plik powinien być zapisany jako UTF-8 bez BOM.
 ### Program AWK
-
+Plik `demo.awk`:
 ```awk
+function registerEmployee(department, employee, salary) {
+    salaries[department, employee] += salary
+    visits[department, employee]++
+    departmentTotals[department] += salary
+    departmentCounts[department]++
+}
+function average(total, count) {
+    return total / count
+}
 BEGIN {
-    total = 0
+    print "=== ANALIZA PRACOWNIKOW ==="
+    print "Wczytywanie danych..."
 }
-
-$3 == "IT" {
-    count[$1]++
-    salary[$1] += $2
-    total += $2
+{
+    registerEmployee($2, $1, $3)
+    if ($3 >= 12000) {
+        highSalaryCount++
+    }
 }
-
 END {
-    for (name in count)
-        print name, count[name], salary[name]
-
-    print "Total:", total
-}
+    print ""
+    print "=== PODSUMOWANIE DZIALOW ==="
+    for (department in departmentTotals) {
+        avg = average(departmentTotals[department], departmentCounts[department])
+        print department,
+              "suma:", departmentTotals[department],
+              "liczba:", departmentCounts[department],
+              "srednia:", avg
+    }
+    print ""
+    print "=== WSZYSCY PRACOWNICY ==="
+    for (key in salaries) {
+        print key,
+              "suma:", salaries[key],
+              "wystapienia:", visits[key]
+    }
+    print ""
+    print "=== DELETE POJEDYNCZEGO ELEMENTU ==="
+    delete salaries["HR", "Anna"]
+    delete visits["HR", "Anna"]
+    for (key in salaries) {
+        print key, salaries[key]
+    }
+    print ""
+    print "=== DELETE CALEJ TABLICY ==="
+    delete salaries
+    delete visits
+    remaining = 0
+    for (key in salaries) {
+        remaining++
+    }
+    if (remaining == 0) {
+        print "Tablice salaries i visits zostaly wyczyszczone"
+    } else {
+        print "Blad: pozostalo elementow:", remaining
+    }
 ```
-
-### Wynik działania
-
-```text
-Jan 2 20000
-Piotr 1 15000
-Total: 35000
-```
-
 
 ## 6. Opis tokenów
 
