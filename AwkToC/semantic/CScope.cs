@@ -2,7 +2,7 @@ namespace AwkToC.Semantic;
 
 public class CScope
 {
-    private Stack<string> scopes = new();
+    private Stack<string> scopes = new(["global"]);
 
     public void EnterFunction(string name)
     {

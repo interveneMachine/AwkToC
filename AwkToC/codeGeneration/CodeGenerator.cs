@@ -1,6 +1,7 @@
 using Antlr4.Runtime.Misc;
 using AwkToC.Semantic;
 using AwkToC.Exceptions;
+using System.Linq.Expressions;
 
 namespace AwkToC.CodeGeneration;
 
@@ -1089,6 +1090,39 @@ class CodeGenerator : AwkBaseVisitor<NodeCompilationResult>
             FreeTmpVariablesIn("function");
 
             stream.WriteLine($"return {returnName};");
+
+            return new NodeCompilationResult();
+        }
+
+         if (context.EXIT() != null)
+        {
+            AwkParser.ExprContext? returnExpression =
+                context.expr();
+
+            // return
+            if (returnExpression == null)
+            {
+                FreeTmpVariablesIn("global");
+                stream.WriteLine("exit(0);");
+                return new NodeCompilationResult();
+            }
+
+            // return expr
+            NodeCompilationResult expressionResult =
+                Visit(returnExpression);
+            
+            string expressionName =
+                RequireReturnName(
+                    expressionResult,
+                    "exit expression"
+                );
+            
+            string returnName = symbolTable.NewTemporaryCName(cScope, false);
+            stream.WriteLine($"int {returnName} = awk_to_int({expressionName});");
+            
+            FreeTmpVariablesIn("global");
+
+            stream.WriteLine($"exit({returnName});");
 
             return new NodeCompilationResult();
         }
