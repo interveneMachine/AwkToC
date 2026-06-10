@@ -244,7 +244,6 @@ DIV        : '/' ;
 MOD        : '%' ;
 POW        : '^' ;
 NOT        : '!' ;
-COLON      : ':' ;
 DOLLAR     : '$' ;
 PIPE       : '|' ;
 

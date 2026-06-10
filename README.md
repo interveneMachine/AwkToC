@@ -296,8 +296,6 @@ terminatable_statement
     : simple_statement
     | BREAK
     | CONTINUE
-    | NEXT
-    | NEXTFILE
     | EXIT expr?
     | RETURN expr?
     | DO newline_opt terminated_statement WHILE LPAREN expr RPAREN
@@ -376,7 +374,6 @@ expr
     | LPAREN multiple_expr_list RPAREN IN NAME
     | expr AND newline_opt expr
     | expr OR newline_opt expr
-    | expr QUESTION newline_opt expr COLON newline_opt expr
     | lvalue ASSIGN expr
     | lvalue ADD_ASSIGN expr
     | lvalue SUB_ASSIGN expr
@@ -427,8 +424,6 @@ FOR      : 'for' ;
 FUNCTION : 'function' ;
 IF       : 'if' ;
 IN       : 'in' ;
-NEXT     : 'next' ;
-NEXTFILE : 'nextfile' ;
 PRINT    : 'print' ;
 RETURN   : 'return' ;
 WHILE    : 'while' ;
@@ -464,8 +459,6 @@ DIV        : '/' ;
 MOD        : '%' ;
 POW        : '^' ;
 NOT        : '!' ;
-QUESTION   : '?' ;
-COLON      : ':' ;
 DOLLAR     : '$' ;
 PIPE       : '|' ;
 
